@@ -1,0 +1,21 @@
+services:
+  server:
+    build: .
+    command: ["bun", "src/server.ts"]
+    environment:
+      PORT: "3000"
+      GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET}
+    restart: unless-stopped
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --config /etc/cloudflared/config.yml run
+    environment:
+      TUNNEL_NAME: ${TUNNEL_NAME}
+      TUNNEL_ID: ${TUNNEL_ID}
+      TUNNEL_HOSTNAME: ${TUNNEL_HOSTNAME}
+    volumes:
+      - ./cloudflared:/etc/cloudflared:ro
+    depends_on:
+      - server

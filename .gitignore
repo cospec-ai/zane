@@ -12,15 +12,13 @@ coverage
 
 # logs
 logs
-_.log
-report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
+*.log
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
-# dotenv environment variable files
+# environment variables
 .env
-.env.development.local
-.env.test.local
-.env.production.local
-.env.local
+.env.*
+!.env.example
 
 # caches
 .eslintcache
@@ -29,3 +27,14 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 
 # misc
 .DS_Store
+dump.rdb
+cloudflared/*.json
+
+# runtime state
+data
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+
+# app data
+features
