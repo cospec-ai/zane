@@ -1,10 +1,15 @@
 services:
   server:
     build: .
-    command: ["bun", "src/server.ts"]
+    image: zane
+    command: ["run", "src/server.ts"]
     environment:
       PORT: "3000"
-      GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET}
+      GITHUB_WEBHOOK_SECRET: "${GITHUB_WEBHOOK_SECRET}"
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data:/usr/src/app/data
     restart: unless-stopped
 
   cloudflared:

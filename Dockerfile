@@ -15,5 +15,10 @@ COPY --from=install /temp/prod/node_modules node_modules
 COPY --from=prerelease /usr/src/app/src src
 COPY --from=prerelease /usr/src/app/package.json package.json
 
+RUN mkdir -p /usr/src/app/data \
+  && chown -R bun:bun /usr/src/app
+
 USER bun
-ENTRYPOINT [ "bun", "run", "src/server.ts" ]
+
+ENTRYPOINT ["bun"]
+CMD ["run", "src/server.ts"]
