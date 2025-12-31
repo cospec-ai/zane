@@ -15,6 +15,16 @@ export function safeRepoDir(repoFullName: string) {
   return repoFullName.replace("/", "__");
 }
 
+export function slugify(text: string) {
+  return text
+    .toLowerCase()
+    .trim()
+    .replace(/[^\w\s-]/g, "")
+    .replace(/[\s_-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .substring(0, 30);
+}
+
 export function verifyWebhookSignature(
   rawBody: Uint8Array,
   signatureHeader: string | null,

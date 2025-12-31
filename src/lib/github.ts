@@ -49,3 +49,47 @@ export async function fetchIssueWithParent(issueNodeId: string) {
 
   return result.data?.node;
 }
+
+export async function fetchIssueByNumber(
+  repoFullName: string,
+  issueNumber: number
+) {
+  const [owner, repo] = repoFullName.split("/");
+  const query = `
+    query($owner: String!, $repo: String!, $issueNumber: Int!) {
+      repository(owner: $owner, name: $repo) {
+        issue(number: $issueNumber) {
+          number
+          title
+          body
+        }
+      }
+    }
+  `;
+
+  const response = await fetch("https://api.github.com/graphql", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${GITHUB_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      query,
+      variables: { owner, repo, issueNumber },
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`GitHub API error: ${response.status} ${response.statusText}`);
+  }
+
+  const result = (await response.json()) as {
+    data?: { repository?: { issue?: any } };
+    errors?: Array<{ message: string }>;
+  };
+  if (result.errors) {
+    throw new Error(`GraphQL errors: ${JSON.stringify(result.errors)}`);
+  }
+
+  return result.data?.repository?.issue;
+}

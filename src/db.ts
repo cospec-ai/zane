@@ -38,38 +38,3 @@ export function upsertWebhookEvent(params: {
       Date.now()
     );
 }
-
-export function upsertFeature(
-  featureKey: string,
-  repoFullName: string,
-  issueNumber: number,
-  title: string | null,
-  mdPath: string
-) {
-  return db
-    .prepare(
-      `INSERT INTO features(feature_key, repo_full_name, issue_number, title, md_path, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?)
-     ON CONFLICT(feature_key) DO UPDATE SET
-       title=excluded.title,
-       md_path=excluded.md_path,
-       updated_at=excluded.updated_at`
-    )
-    .run(featureKey, repoFullName, issueNumber, title, mdPath, Date.now());
-}
-
-export function upsertFeatureTask(
-  featureKey: string,
-  taskIssueNumber: number,
-  linkStatus: "active" | "removed"
-) {
-  return db
-    .prepare(
-      `INSERT INTO feature_tasks(feature_key, task_issue_number, link_status, updated_at)
-     VALUES (?, ?, ?, ?)
-     ON CONFLICT(feature_key, task_issue_number) DO UPDATE SET
-       link_status=excluded.link_status,
-       updated_at=excluded.updated_at`
-    )
-    .run(featureKey, taskIssueNumber, linkStatus, Date.now());
-}

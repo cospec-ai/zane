@@ -1,76 +1,74 @@
-import { mkdir, writeFile } from "node:fs/promises";
-import path from "node:path";
 import { Worker } from "bullmq";
+import { writeFile, mkdir } from "node:fs/promises";
+import path from "node:path";
 
-import { fetchIssueWithParent } from "./lib/github";
-import { upsertFeature, upsertFeatureTask } from "./db";
-import { exists, safeRepoDir } from "./utils";
-import { connection } from "./queue";
+import type { RunTaskJob } from "./types";
+import { fetchIssueWithParent, fetchIssueByNumber } from "./lib/github";
+import { sanitizeMarkdown } from "./lib/markdown";
+import { slugify } from "./utils";
+import { connection, queue } from "./queue";
 
-interface EnsureFeatureSpecJob {
-  projectItemNodeId: string;
-  contentNodeId: string;
-  projectNodeId?: string;
-  org?: string;
-  from?: string;
-  to?: string;
-  changedAt?: string;
-}
+const REQUEUE_DELAY_MS = 30000;
+const GITHUB_TOKEN = process.env.GITHUB_TOKEN ?? "";
+const LOCAL_REPO_PATH = process.env.LOCAL_REPO_PATH ?? "";
 
 const worker = new Worker(
   "feature-pipeline",
   async (job) => {
-    console.log(`[worker] processing job: ${job.id} (${job.name})`);
-    
-    if (job.name === "ENSURE_FEATURE_SPEC") {
-      const data = job.data as EnsureFeatureSpecJob;
+    console.log(`[worker] processing: ${job.id}`);
+    if (job.name !== "RUN_TASK") throw new Error(`Unknown job: ${job.name}`);
 
-      const issue = await fetchIssueWithParent(data.contentNodeId);
+    const { issueNodeId } = job.data as RunTaskJob;
+    const issue = await fetchIssueWithParent(issueNodeId);
+    if (!issue) throw new Error(`Issue not found: ${issueNodeId}`);
 
-      if (!issue) {
-        throw new Error(`Issue not found: ${data.contentNodeId}`);
-      }
-
-      if (!issue.parent) {
-        console.log(`[worker] Issue #${issue.number} has no parent, skipping`);
-        return;
-      }
-
-      const repoFullName = issue.repository.nameWithOwner;
-      const parentNumber = issue.parent.number;
-      const parentTitle = issue.parent.title;
-      const parentDescription = issue.parent.body || "";
-
-      const dir = path.resolve(
-        process.cwd(),
-        process.env.FEATURES_DIR ?? "./features",
-        safeRepoDir(repoFullName)
-      );
-      await mkdir(dir, { recursive: true });
-
-      const mdPath = path.join(dir, `feature-${parentNumber}.md`);
-
-      if (!(await exists(mdPath))) {
-        await writeFile(mdPath, parentDescription, "utf8");
-      }
-
-      const featureKey = `${repoFullName}#${parentNumber}`;
-      upsertFeature(
-        featureKey,
-        repoFullName,
-        parentNumber,
-        parentTitle ?? null,
-        mdPath
-      );
-
-      // Link the child issue to the parent feature
-      const featureKeyForTask = `${repoFullName}#${parentNumber}`;
-      upsertFeatureTask(featureKeyForTask, issue.number, "active");
-
+    if (!issue.parent) {
+      console.log(`[worker] Issue #${issue.number} no parent, re-queuing`);
+      await queue.add("RUN_TASK", { issueNodeId } as RunTaskJob, {
+        jobId: `task-${issueNodeId}-${Date.now()}`,
+        delay: REQUEUE_DELAY_MS,
+        attempts: 2,
+        backoff: { type: "exponential", delay: 5000 },
+      });
       return;
     }
 
-    throw new Error(`Unknown job: ${job.name}`);
+    const parent = await fetchIssueByNumber(issue.repository.nameWithOwner, issue.parent.number);
+    if (!parent) throw new Error(`Parent #${issue.parent.number} not found`);
+
+    const taskDir = path.join(LOCAL_REPO_PATH, ".tasks", `task-${issue.number}`);
+    const headers = { Authorization: `Bearer ${GITHUB_TOKEN}` };
+
+    const [epicBody, taskBody] = await Promise.all([
+      sanitizeMarkdown(taskDir, parent.body || "", { headers }),
+      sanitizeMarkdown(taskDir, issue.body || "", { headers }),
+    ]);
+
+    const branch = `ai/task-${issue.number}-${slugify(issue.title)}`;
+    const prompt = `# Task: ${issue.title}
+
+## Epic: ${parent.title} (#${parent.number})
+${epicBody}
+
+## Task Details
+**Issue #${issue.number}**
+${taskBody}
+
+## Instructions
+1. Create and checkout branch: \`${branch}\`
+2. Implement the task (keep diff small, follow existing patterns)
+3. Check \`git log --oneline -10\` and commit matching that style
+`;
+
+    const promptPath = path.join(taskDir, "task.md");
+    await mkdir(taskDir, { recursive: true });
+    await writeFile(promptPath, prompt, "utf8");
+
+    console.log(`[worker] executing task #${issue.number}`);
+
+    // TODO: execute task with OpenCode
+
+    console.log(`[worker] completed task #${issue.number}`);
   },
   {
     connection,

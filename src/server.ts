@@ -1,5 +1,6 @@
 import * as db from "./db";
 import { queue } from "./queue";
+import type { RunTaskJob } from "./types";
 import { verifyWebhookSignature } from "./utils";
 
 const GITHUB_WEBHOOK_SECRET = process.env.GITHUB_WEBHOOK_SECRET ?? "";
@@ -69,18 +70,10 @@ const server = Bun.serve({
       if (movedToInProgress) {
         const contentNodeId = payload.projects_v2_item?.content_node_id;
         const jobId = `task-${contentNodeId}-${Date.now()}`;
-        
+
         await queue.add(
-          "ENSURE_FEATURE_SPEC",
-          {
-            projectItemNodeId: itemNodeId,
-            contentNodeId, // this is the Issue node id; useful later
-            projectNodeId: payload.projects_v2_item?.project_node_id,
-            org: payload.organization?.login,
-            from: fv.from?.name,
-            to: fv.to?.name,
-            changedAt: payload.projects_v2_item?.updated_at,
-          },
+          "RUN_TASK",
+          { issueNodeId: contentNodeId } as RunTaskJob,
           {
             jobId,
             attempts: 2,
