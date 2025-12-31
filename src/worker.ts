@@ -1,10 +1,11 @@
 import { Worker } from "bullmq";
-import { writeFile, mkdir } from "node:fs/promises";
+import { writeFile, mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
 
 import type { RunTaskJob } from "./types";
 import { fetchIssueWithParent, fetchIssueByNumber } from "./lib/github";
 import { sanitizeMarkdown } from "./lib/markdown";
+import { OpenCodeInstance, waitForCompletion } from "./lib/opencode";
 import { slugify } from "./utils";
 import { connection, queue } from "./queue";
 
@@ -65,8 +66,20 @@ ${taskBody}
     await writeFile(promptPath, prompt, "utf8");
 
     console.log(`[worker] executing task #${issue.number}`);
-
-    // TODO: execute task with OpenCode
+  
+    const instance = await OpenCodeInstance.spawn(LOCAL_REPO_PATH);
+  
+    try {
+      const session = await instance.createSession(`Task: ${path.basename(promptPath)}`);
+      console.log(`[opencode:${instance.port}] Session: ${session.id}`);
+  
+      await instance.sendPromptAsync(session.id, await readFile(promptPath, "utf-8"));
+      console.log(`[opencode:${instance.port}] Prompt sent, listening for events...`);
+  
+      await waitForCompletion(instance, session.id, 600000);
+    } finally {
+      instance.close();
+    }
 
     console.log(`[worker] completed task #${issue.number}`);
   },
