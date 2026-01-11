@@ -3,8 +3,8 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "bun --hot src/index.ts",
-    "start": "bun src/index.ts"
+    "dev": "bun --env-file ../../.env --hot src/index.ts",
+    "start": "bun --env-file ../../.env src/index.ts"
   },
   "devDependencies": {
     "@types/bun": "latest",
