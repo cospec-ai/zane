@@ -21,6 +21,13 @@
     "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,
 
+    "typeRoots": [
+      "./node_modules/@types",
+      "./services/anchor/node_modules/@types",
+      "./services/pulse/node_modules/@types",
+      "./services/orbit/node_modules/@types"
+    ],
+
     // Some stricter flags (disabled by default)
     "noUnusedLocals": false,
     "noUnusedParameters": false,

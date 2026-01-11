@@ -29,6 +29,8 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 .DS_Store
 dump.rdb
 cloudflared/*.json
+.ideas
+.docs
 
 # runtime state
 data

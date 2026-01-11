@@ -1,0 +1,19 @@
+{
+  "name": "pulse",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "bun --hot src/server.ts",
+    "start": "bun src/server.ts",
+    "worker": "bun src/worker.ts",
+    "typecheck": "bunx tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.7.0"
+  },
+  "dependencies": {
+    "bullmq": "^5.66.4",
+    "ioredis": "^5.8.2"
+  }
+}

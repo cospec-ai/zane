@@ -9,7 +9,7 @@ services:
     restart: unless-stopped
 
   server:
-    build: .
+    build: ./services/pulse
     image: zane
     command: ["run", "src/server.ts"]
     environment:

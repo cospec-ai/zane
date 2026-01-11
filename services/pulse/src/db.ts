@@ -1,6 +1,11 @@
 import { Database } from "bun:sqlite";
+import path from "node:path";
 
-export const db = new Database("data/db.sqlite");
+const repoRoot = path.resolve(import.meta.dir, "..", "..", "..");
+const defaultDbPath = path.join(repoRoot, "data", "db.sqlite");
+const dbPath = process.env.PULSE_DB_PATH ?? defaultDbPath;
+
+export const db = new Database(dbPath);
 
 export function upsertDelivery(
   deliveryId: string,

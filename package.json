@@ -4,18 +4,12 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "bun --hot src/server.ts",
-    "start": "bun src/server.ts",
-    "worker": "bun src/worker.ts"
+    "migrate": "bash scripts/migrate.sh"
   },
   "devDependencies": {
     "@types/bun": "latest"
   },
   "peerDependencies": {
     "typescript": "^5"
-  },
-  "dependencies": {
-    "bullmq": "^5.66.4",
-    "ioredis": "^5.8.2"
   }
 }
