@@ -1,11 +1,11 @@
 import { Worker } from "bullmq";
-import { writeFile, mkdir, readFile } from "node:fs/promises";
+import { writeFile, mkdir } from "node:fs/promises";
 import path from "node:path";
 
 import type { RunTaskJob } from "./types";
 import { fetchIssueWithParent, fetchIssueByNumber } from "./lib/github";
 import { sanitizeMarkdown } from "./lib/markdown";
-import { OpenCodeInstance, waitForCompletion } from "./lib/opencode";
+import { runCodexTask } from "./lib/codex";
 import { slugify } from "./utils";
 import { connection, queue } from "./queue";
 
@@ -66,22 +66,12 @@ ${taskBody}
     await writeFile(promptPath, prompt, "utf8");
 
     console.log(`[worker] executing task #${issue.number}`);
-  
-    const instance = await OpenCodeInstance.spawn(LOCAL_REPO_PATH);
-  
-    try {
-      const session = await instance.createSession(`Task: ${path.basename(promptPath)}`);
-      console.log(`[opencode:${instance.port}] Session: ${session.id}`);
-  
-      await instance.sendPromptAsync(session.id, await readFile(promptPath, "utf-8"), {
-        model: { providerID: "anthropic", modelID: "claude-opus-4-5" },
-      });
-      console.log(`[opencode:${instance.port}] Prompt sent, listening for events...`);
-  
-      await waitForCompletion(instance, session.id, 600000);
-    } finally {
-      instance.close();
-    }
+
+    await runCodexTask({
+      repoPath: LOCAL_REPO_PATH,
+      promptPath,
+      timeoutMs: 600000,
+    });
 
     console.log(`[worker] completed task #${issue.number}`);
   },
