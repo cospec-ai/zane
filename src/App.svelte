@@ -1,8 +1,11 @@
 <script lang="ts">
   import { socket } from "./lib/socket.svelte";
+  import { threads } from "./lib/threads.svelte";
+  import ThreadList from "./components/ThreadList.svelte";
 
   let url = $state("wss://orbit.yrvgilpord.workers.dev/ws/client");
   let token = $state("");
+  let workingDir = $state("");
 
   function handleConnect() {
     if (socket.status === "connected") {
@@ -11,6 +14,12 @@
       socket.connect(url, token);
     }
   }
+
+  $effect(() => {
+    if (socket.status === "connected") {
+      threads.fetch();
+    }
+  });
 </script>
 
 <div class="app">
@@ -34,6 +43,11 @@
       placeholder="Token (optional)"
       disabled={socket.status === "connected"}
     />
+    <input
+      type="text"
+      bind:value={workingDir}
+      placeholder="Working directory (e.g. /home/user/project)"
+    />
     <button onclick={handleConnect}>
       {socket.status === "connected" ? "Disconnect" : "Connect"}
     </button>
@@ -41,6 +55,10 @@
 
   {#if socket.error}
     <p class="error">{socket.error}</p>
+  {/if}
+
+  {#if socket.status === "connected"}
+    <ThreadList {workingDir} />
   {/if}
 </div>
 
