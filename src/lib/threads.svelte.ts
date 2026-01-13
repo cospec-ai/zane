@@ -1,5 +1,9 @@
 import type { ThreadInfo, RpcMessage } from "./types";
 import { socket } from "./socket.svelte";
+import { messages } from "./messages.svelte";
+import { navigate } from "../router";
+
+const STORE_KEY = "__zane_threads_store__";
 
 class ThreadsStore {
   list = $state<ThreadInfo[]>([]);
@@ -7,10 +11,6 @@ class ThreadsStore {
   loading = $state(false);
 
   #pendingRequests = new Map<number, string>();
-
-  constructor() {
-    socket.onMessage((msg) => this.#handleMessage(msg));
-  }
 
   get current(): ThreadInfo | undefined {
     return this.list.find((t) => t.id === this.currentId);
@@ -31,15 +31,16 @@ class ThreadsStore {
     this.currentId = threadId;
   }
 
-  open(threadId: string, cwd: string) {
+  open(threadId: string) {
     const id = Date.now();
     this.loading = true;
     this.currentId = threadId;
+    messages.clearThread(threadId);
     this.#pendingRequests.set(id, "resume");
     socket.send({
       method: "thread/resume",
       id,
-      params: { threadId, cwd },
+      params: { threadId },
     });
   }
 
@@ -67,12 +68,13 @@ class ThreadsStore {
     }
   }
 
-  #handleMessage(msg: RpcMessage) {
+  handleMessage(msg: RpcMessage) {
     if (msg.method === "thread/started") {
       const params = msg.params as { thread: ThreadInfo };
       if (params?.thread) {
         this.list = [params.thread, ...this.list];
         this.currentId = params.thread.id;
+        navigate(`/thread/${params.thread.id}`);
       }
       return;
     }
@@ -94,4 +96,14 @@ class ThreadsStore {
   }
 }
 
-export const threads = new ThreadsStore();
+function getStore(): ThreadsStore {
+  const global = globalThis as Record<string, unknown>;
+  if (!global[STORE_KEY]) {
+    const store = new ThreadsStore();
+    global[STORE_KEY] = store;
+    socket.onMessage((msg) => store.handleMessage(msg));
+  }
+  return global[STORE_KEY] as ThreadsStore;
+}
+
+export const threads = getStore();

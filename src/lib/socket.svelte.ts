@@ -6,6 +6,8 @@ const CLIENT_INFO = {
   version: "0.1.0",
 };
 
+const STORE_KEY = "__zane_socket_store__";
+
 class SocketStore {
   status = $state<ConnectionStatus>("disconnected");
   error = $state<string | null>(null);
@@ -100,4 +102,12 @@ class SocketStore {
   }
 }
 
-export const socket = new SocketStore();
+function getStore(): SocketStore {
+  const global = globalThis as Record<string, unknown>;
+  if (!global[STORE_KEY]) {
+    global[STORE_KEY] = new SocketStore();
+  }
+  return global[STORE_KEY] as SocketStore;
+}
+
+export const socket = getStore();

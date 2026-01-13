@@ -14,36 +14,9 @@ export interface ThreadInfo {
 export interface Message {
   id: string;
   role: "user" | "assistant" | "tool";
-  kind?:
-    | "reasoning"
-    | "command"
-    | "file"
-    | "mcp"
-    | "diff"
-    | "web"
-    | "review"
-    | "output";
+  kind?: "reasoning" | "command" | "file" | "mcp" | "web";
   text: string;
   threadId: string;
-  turnId?: string;
-}
-
-export interface ApprovalChange {
-  path: string;
-  kind?: string;
-  diff?: string;
-}
-
-export interface ApprovalRequest {
-  requestId: string | number;
-  threadId: string;
-  turnId: string;
-  itemId: string;
-  kind: "commandExecution" | "fileChange";
-  reason?: string;
-  command?: string;
-  cwd?: string;
-  changes?: ApprovalChange[];
 }
 
 // JSON-RPC style message envelope
