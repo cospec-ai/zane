@@ -25,6 +25,9 @@
   --text-base: 1rem;
   --text-lg: 1.125rem;
 
+  /* Layout */
+  --app-max-width: 1100px;
+
   /* Transitions */
   --transition-fast: 150ms ease;
   --transition-normal: 200ms ease;

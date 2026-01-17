@@ -23,6 +23,8 @@ html, body {
   flex-direction: column;
   height: 100%;
   width: 100%;
+  max-width: var(--app-max-width);
+  margin: 0 auto;
 }
 
 /* Smooth theme transitions */

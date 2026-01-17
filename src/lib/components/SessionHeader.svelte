@@ -21,42 +21,51 @@
 </script>
 
 <header class="session-header">
-  <a href="/" class="brand">zane</a>
-  <span class="separator">·</span>
-  {#if status === "connecting"}
-    <ShimmerDot color={config.color} />
-  {:else}
-    <span class="status-icon" style:color={config.color} title={config.label} aria-label={config.label}>
-      {config.icon}
-    </span>
-  {/if}
-  {#if threadId}
+  <div class="session-header-inner">
+    <a href="/" class="brand">zane</a>
     <span class="separator">·</span>
-    <span class="thread-id">{threadId.slice(0, 8)}</span>
-  {/if}
-  {#if model}
-    <span class="separator">·</span>
-    <span class="model">{model}</span>
-  {/if}
+    {#if status === "connecting"}
+      <ShimmerDot color={config.color} />
+    {:else}
+      <span class="status-icon" style:color={config.color} title={config.label} aria-label={config.label}>
+        {config.icon}
+      </span>
+    {/if}
+    {#if threadId}
+      <span class="separator">·</span>
+      <span class="thread-id">{threadId.slice(0, 8)}</span>
+    {/if}
+    {#if model}
+      <span class="separator">·</span>
+      <span class="model">{model}</span>
+    {/if}
 
-  <div class="spacer"></div>
+    <div class="spacer"></div>
 
-  {#if threadId}
-    <a class="review-link" href={`/thread/${threadId}/review`}>review</a>
-  {/if}
+    {#if threadId}
+      <a class="review-link" href={`/thread/${threadId}/review`}>review</a>
+    {/if}
+  </div>
 </header>
 
 <style>
   .session-header {
-    display: flex;
-    align-items: center;
-    gap: var(--space-sm);
-    padding: var(--space-sm) var(--space-md);
+    width: 100vw;
+    margin-left: calc(50% - 50vw);
     background: var(--cli-bg-elevated);
     border-bottom: 1px solid var(--cli-border);
     font-family: var(--font-mono);
     font-size: var(--text-sm);
     color: var(--cli-text);
+  }
+
+  .session-header-inner {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-sm) var(--space-md);
+    max-width: var(--app-max-width);
+    margin: 0 auto;
   }
 
   .brand {
