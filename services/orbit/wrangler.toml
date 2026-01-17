@@ -6,6 +6,11 @@ durable_objects.bindings = [
   { name = "ORBIT_DO", class_name = "OrbitRelay" }
 ]
 
+[[d1_databases]]
+binding = "ORBIT_DB"
+database_name = "zane-orbit"
+database_id = "536ceb2a-f19a-4951-b8d6-0f44adf97934"
+
 [[migrations]]
 tag = "v1"
 new_classes = ["OrbitRelay"]

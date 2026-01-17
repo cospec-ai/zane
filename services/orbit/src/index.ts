@@ -1,7 +1,9 @@
 type Role = "client" | "anchor";
+type Direction = "client" | "server";
 
 export interface Env {
   ORBIT_TOKEN?: string;
+  ORBIT_DB?: D1Database;
   ORBIT_DO: DurableObjectNamespace;
 }
 
@@ -27,12 +29,122 @@ function getRoleFromPath(pathname: string): Role | null {
   return null;
 }
 
+function corsHeaders(origin: string | null): HeadersInit {
+  const allowedOrigin = origin ?? "*";
+  return {
+    "access-control-allow-origin": allowedOrigin,
+    "access-control-allow-methods": "GET, OPTIONS",
+    "access-control-allow-headers": "authorization, content-type",
+    "access-control-max-age": "600",
+    vary: "origin",
+  };
+}
+
+function parseJsonMessage(payload: string): Record<string, unknown> | null {
+  const trimmed = payload.trim();
+  if (!trimmed.startsWith("{")) return null;
+  try {
+    const parsed = JSON.parse(trimmed) as Record<string, unknown>;
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
+function extractThreadId(message: Record<string, unknown>): string | null {
+  const params = asRecord(message.params);
+  const result = asRecord(message.result);
+  const threadFromParams = asRecord(params?.thread);
+  const threadFromResult = asRecord(result?.thread);
+
+  const candidates = [
+    params?.threadId,
+    params?.thread_id,
+    result?.threadId,
+    result?.thread_id,
+    threadFromParams?.id,
+    threadFromResult?.id,
+  ];
+
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate.trim()) return candidate;
+    if (typeof candidate === "number") return String(candidate);
+  }
+
+  return null;
+}
+
+function extractTurnId(message: Record<string, unknown>): string | null {
+  const params = asRecord(message.params);
+  const result = asRecord(message.result);
+  const turnFromParams = asRecord(params?.turn);
+  const turnFromResult = asRecord(result?.turn);
+
+  const candidates = [params?.turnId, params?.turn_id, turnFromParams?.id, turnFromResult?.id];
+
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate.trim()) return candidate;
+    if (typeof candidate === "number") return String(candidate);
+  }
+
+  return null;
+}
+
+function extractMethod(message: Record<string, unknown>): string | null {
+  const method = message.method;
+  if (typeof method === "string" && method.trim()) return method;
+  const type = message.type;
+  if (typeof type === "string" && type.trim()) return type;
+  return null;
+}
+
+async function fetchThreadEvents(req: Request, env: Env, origin: string | null): Promise<Response> {
+  if (!env.ORBIT_DB) {
+    return new Response("D1 not configured", { status: 501, headers: corsHeaders(origin) });
+  }
+  const url = new URL(req.url);
+  const parts = url.pathname.split("/").filter(Boolean);
+  const threadId = parts.length === 3 ? parts[1] : null;
+  if (!threadId) {
+    return new Response("Not found", { status: 404, headers: corsHeaders(origin) });
+  }
+
+  const query = env.ORBIT_DB.prepare("SELECT entry_json FROM orbit_events WHERE thread_id = ? ORDER BY id ASC").bind(
+    threadId,
+  );
+  const { results } = await query.all<{ entry_json: string }>();
+  const lines = results.map((row) => row.entry_json).join("\n");
+  const body = lines ? `${lines}\n` : "";
+
+  return new Response(body, {
+    status: 200,
+    headers: {
+      "content-type": "application/x-ndjson",
+      ...corsHeaders(origin),
+    },
+  });
+}
+
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
     const url = new URL(req.url);
+    const origin = req.headers.get("origin");
 
     if (req.method === "GET" && url.pathname === "/health") {
       return new Response(null, { status: 200 });
+    }
+
+    if (req.method === "OPTIONS" && url.pathname.startsWith("/threads/") && url.pathname.endsWith("/events")) {
+      return new Response(null, { status: 204, headers: corsHeaders(origin) });
+    }
+
+    if (req.method === "GET" && url.pathname.startsWith("/threads/") && url.pathname.endsWith("/events")) {
+      return fetchThreadEvents(req, env, origin);
     }
 
     const role = getRoleFromPath(url.pathname);
@@ -58,8 +170,13 @@ export default {
 };
 
 export class OrbitRelay {
+  private env: Env;
   private clientSockets = new Set<WebSocket>();
   private anchorSockets = new Set<WebSocket>();
+
+  constructor(_state: DurableObjectState, env: Env) {
+    this.env = env;
+  }
 
   fetch(req: Request): Response {
     if (req.headers.get("Upgrade")?.toLowerCase() !== "websocket") {
@@ -86,6 +203,7 @@ export class OrbitRelay {
   private registerSocket(socket: WebSocket, role: Role): void {
     const source = role === "client" ? this.clientSockets : this.anchorSockets;
     const targets = role === "client" ? this.anchorSockets : this.clientSockets;
+    const direction: Direction = role === "client" ? "client" : "server";
 
     source.add(socket);
 
@@ -98,6 +216,7 @@ export class OrbitRelay {
     );
 
     socket.addEventListener("message", (event) => {
+      this.logEvent(event.data, direction);
       for (const target of targets) {
         try {
           target.send(event.data);
@@ -118,5 +237,52 @@ export class OrbitRelay {
 
     socket.addEventListener("close", cleanup);
     socket.addEventListener("error", cleanup);
+  }
+
+  private async logEvent(data: unknown, direction: Direction): Promise<void> {
+    if (!this.env.ORBIT_DB) return;
+
+    let payload = "";
+    if (typeof data === "string") {
+      payload = data;
+    } else if (data instanceof ArrayBuffer) {
+      payload = new TextDecoder().decode(data);
+    } else if (data instanceof Uint8Array) {
+      payload = new TextDecoder().decode(data);
+    } else {
+      return;
+    }
+
+    const message = parseJsonMessage(payload);
+    if (!message) return;
+
+    const threadId = extractThreadId(message);
+    if (!threadId) return;
+
+    const method = extractMethod(message);
+    const turnId = extractTurnId(message);
+    const entry = {
+      ts: new Date().toISOString(),
+      direction,
+      message,
+    };
+
+    try {
+      await this.env.ORBIT_DB.prepare(
+        "INSERT INTO orbit_events (thread_id, ts, direction, role, method, turn_id, entry_json) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      )
+        .bind(
+          threadId,
+          entry.ts,
+          direction,
+          direction === "client" ? "client" : "anchor",
+          method,
+          turnId,
+          JSON.stringify(entry),
+        )
+        .run();
+    } catch (err) {
+      console.warn("[orbit] failed to log event", err);
+    }
   }
 }

@@ -88,6 +88,22 @@ function sendToAppServer(payload: string): void {
   }
 }
 
+type JsonObject = Record<string, unknown>;
+
+function parseJsonRpcMessage(payload: string): JsonObject | null {
+  const trimmed = payload.trim();
+  if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) return null;
+  try {
+    const parsed = JSON.parse(trimmed) as JsonObject;
+    if ("method" in parsed || "id" in parsed) {
+      return parsed;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
 function buildOrbitUrl(): string | null {
   if (!ORBIT_URL) return null;
   try {
@@ -155,14 +171,7 @@ function normalizeLine(input: string): string {
 }
 
 function isJsonRpcMessage(payload: string): boolean {
-  const trimmed = payload.trim();
-  if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) return false;
-  try {
-    const parsed = JSON.parse(trimmed) as Record<string, unknown>;
-    return "method" in parsed || "id" in parsed;
-  } catch {
-    return false;
-  }
+  return parseJsonRpcMessage(payload) !== null;
 }
 
 async function streamLines(
