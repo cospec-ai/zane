@@ -5,10 +5,9 @@
   interface Props {
     status: ConnectionStatus;
     threadId: string | null;
-    model?: string;
   }
 
-  let { status, threadId, model }: Props = $props();
+  let { status, threadId }: Props = $props();
 
   const statusConfig: Record<ConnectionStatus, { icon: string; color: string; label: string }> = {
     connected: { icon: "●", color: "var(--cli-success)", label: "connected" },
@@ -35,10 +34,6 @@
       <span class="separator">·</span>
       <span class="thread-id">{threadId.slice(0, 8)}</span>
     {/if}
-    {#if model}
-      <span class="separator">·</span>
-      <span class="model">{model}</span>
-    {/if}
 
     <div class="spacer"></div>
 
@@ -58,6 +53,7 @@
     font-size: var(--text-sm);
     color: var(--cli-text);
   }
+
 
   .session-header-inner {
     display: flex;
@@ -88,11 +84,6 @@
   }
 
   .thread-id {
-    color: var(--cli-text-dim);
-    font-size: var(--text-xs);
-  }
-
-  .model {
     color: var(--cli-text-dim);
     font-size: var(--text-xs);
   }

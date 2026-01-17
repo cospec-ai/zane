@@ -6,20 +6,12 @@
   import ShimmerDot from "../lib/components/ShimmerDot.svelte";
   import "../lib/styles/tokens.css";
 
-  let newThreadDir = $state("");
-
   function handleConnect() {
     if (socket.status === "connected") {
       socket.disconnect();
       threads.list = [];
     } else {
       socket.connect(config.url, config.token);
-    }
-  }
-
-  function handleNewThread() {
-    if (newThreadDir.trim()) {
-      threads.start(newThreadDir.trim());
     }
   }
 
@@ -49,33 +41,35 @@
 
 <div class="home">
   <header class="header">
-    <span class="brand">zane</span>
-    <span class="separator">·</span>
-    {#if socket.status === "connecting"}
-      <ShimmerDot color="var(--cli-text-dim)" />
-    {:else}
-      <span
-        class="status-icon"
-        class:connected={socket.status === "connected"}
-        class:error={socket.status === "error"}
-      >
-        {socket.status === "connected" ? "●" : socket.status === "error" ? "✗" : "○"}
+    <div class="header-inner">
+      <span class="brand">zane</span>
+      <span class="separator">·</span>
+      {#if socket.status === "connecting"}
+        <ShimmerDot color="var(--cli-text-dim)" />
+      {:else}
+        <span
+          class="status-icon"
+          class:connected={socket.status === "connected"}
+          class:error={socket.status === "error"}
+        >
+          {socket.status === "connected" ? "●" : socket.status === "error" ? "✗" : "○"}
+        </span>
+      {/if}
+      <span class="status-label" class:connected={socket.status === "connected"}>
+        {socket.status}
       </span>
-    {/if}
-    <span class="status-label" class:connected={socket.status === "connected"}>
-      {socket.status}
-    </span>
 
-    <div class="spacer"></div>
+      <div class="spacer"></div>
 
-    <button
-      type="button"
-      class="theme-toggle"
-      onclick={() => theme.cycle()}
-      title="Theme: {theme.current}"
-    >
-      {themeIcons[theme.current]}
-    </button>
+      <button
+        type="button"
+        class="theme-toggle"
+        onclick={() => theme.cycle()}
+        title="Theme: {theme.current}"
+      >
+        {themeIcons[theme.current]}
+      </button>
+    </div>
   </header>
 
   <div class="connection">
@@ -115,20 +109,10 @@
     <div class="threads-section">
       <div class="section-header">
         <span class="section-title">Threads</span>
-        <button class="refresh-btn" onclick={() => threads.fetch()} title="Refresh">↻</button>
-      </div>
-
-      <div class="new-thread">
-        <span class="prompt">&gt;</span>
-        <input
-          type="text"
-          bind:value={newThreadDir}
-          placeholder="Working directory path..."
-          onkeydown={(e) => e.key === "Enter" && handleNewThread()}
-        />
-        <button class="new-btn" onclick={handleNewThread} disabled={!newThreadDir.trim()}>
-          New
-        </button>
+        <div class="section-actions">
+          <a class="new-task-link" href="/task">New task</a>
+          <button class="refresh-btn" onclick={() => threads.fetch()} title="Refresh">↻</button>
+        </div>
       </div>
 
       {#if threads.loading}
@@ -164,7 +148,6 @@
     display: flex;
     flex-direction: column;
     min-height: 100vh;
-    overflow: hidden;
     background: var(--cli-bg);
     color: var(--cli-text);
     font-family: var(--font-mono);
@@ -173,12 +156,19 @@
 
   /* Header */
   .header {
+    width: 100vw;
+    margin-left: calc(50% - 50vw);
+    background: var(--cli-bg-elevated);
+    border-bottom: 1px solid var(--cli-border);
+  }
+
+  .header-inner {
     display: flex;
     align-items: center;
     gap: var(--space-sm);
     padding: var(--space-sm) var(--space-md);
-    background: var(--cli-bg-elevated);
-    border-bottom: 1px solid var(--cli-border);
+    max-width: var(--app-max-width);
+    margin: 0 auto;
   }
 
   .brand {
@@ -255,7 +245,7 @@
 
   .field input {
     flex: 1;
-        padding: var(--space-sm);
+    padding: var(--space-sm);
     background: var(--cli-bg);
     border: 1px solid var(--cli-border);
     border-radius: var(--radius-sm);
@@ -321,7 +311,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: var(--space-sm) var(--space-md);
+    padding: var(--space-sm) 0 var(--space-sm) var(--space-md);
     border-bottom: 1px solid var(--cli-border);
   }
 
@@ -332,8 +322,32 @@
     letter-spacing: 0.05em;
   }
 
+  .section-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+  }
+
+  .new-task-link {
+    padding: var(--space-sm);
+    border: 1px solid var(--cli-border);
+    border-radius: var(--radius-sm);
+    color: var(--cli-text-dim);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    text-decoration: none;
+    text-transform: lowercase;
+    transition: all var(--transition-fast);
+  }
+
+  .new-task-link:hover {
+    background: var(--cli-selection);
+    color: var(--cli-text);
+    border-color: var(--cli-text-muted);
+  }
+
   .refresh-btn {
-    padding: var(--space-xs);
+    padding: var(--space-sm);
     background: transparent;
     border: none;
     color: var(--cli-text-muted);
@@ -346,62 +360,9 @@
     color: var(--cli-text);
   }
 
-  /* New Thread */
-  .new-thread {
-    display: flex;
-    align-items: center;
-    gap: var(--space-sm);
-    padding: var(--space-sm) var(--space-md);
-    background: var(--cli-bg-elevated);
-    border-bottom: 1px solid var(--cli-border);
-  }
-
-  .prompt {
-    color: var(--cli-prefix-agent);
-    font-weight: 600;
-  }
-
-  .new-thread input {
-    flex: 1;
-        padding: var(--space-sm);
-    background: transparent;
-    border: none;
-    color: var(--cli-text);
-    font-family: var(--font-mono);
-    font-size: var(--text-sm);
-  }
-
-  .new-thread input:focus {
-    outline: none;
-  }
-
-  .new-thread input::placeholder {
-    color: var(--cli-text-muted);
-  }
-
-  .new-btn {
-    padding: var(--space-xs) var(--space-sm);
-    background: var(--cli-prefix-agent);
-    border: none;
-    border-radius: var(--radius-sm);
-    color: var(--cli-bg);
-    font-family: var(--font-mono);
-    font-size: var(--text-xs);
-    cursor: pointer;
-    transition: opacity var(--transition-fast);
-  }
-
-  .new-btn:hover:not(:disabled) {
-    opacity: 0.9;
-  }
-
-  .new-btn:disabled {
-    opacity: 0.3;
-    cursor: not-allowed;
-  }
-
   /* Loading / Empty */
-  .loading, .empty {
+  .loading,
+  .empty {
     display: flex;
     align-items: center;
     gap: var(--space-sm);

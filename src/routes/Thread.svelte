@@ -64,7 +64,6 @@
     <SessionHeader
         status={socket.status}
         threadId={threadId}
-        model={threads.current?.modelProvider}
     />
 
     <div class="transcript" bind:this={container}>

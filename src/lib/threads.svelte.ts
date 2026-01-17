@@ -11,6 +11,7 @@ class ThreadsStore {
   loading = $state(false);
 
   #pendingRequests = new Map<number, string>();
+  #pendingStartInput: string | null = null;
 
   get current(): ThreadInfo | undefined {
     return this.list.find((t) => t.id === this.currentId);
@@ -44,13 +45,18 @@ class ThreadsStore {
     });
   }
 
-  start(cwd: string) {
+  start(cwd: string, input?: string, options?: { approvalPolicy?: string; sandbox?: string }) {
     const id = Date.now();
     this.#pendingRequests.set(id, "start");
+    this.#pendingStartInput = input?.trim() ? input.trim() : null;
     socket.send({
       method: "thread/start",
       id,
-      params: { cwd },
+      params: {
+        cwd,
+        ...(options?.approvalPolicy ? { approvalPolicy: options.approvalPolicy } : {}),
+        ...(options?.sandbox ? { sandbox: options.sandbox } : {}),
+      },
     });
   }
 
@@ -75,6 +81,17 @@ class ThreadsStore {
         this.list = [params.thread, ...this.list];
         this.currentId = params.thread.id;
         navigate(`/thread/${params.thread.id}`);
+        if (this.#pendingStartInput) {
+          socket.send({
+            method: "turn/start",
+            id: Date.now(),
+            params: {
+              threadId: params.thread.id,
+              input: [{ type: "text", text: this.#pendingStartInput }],
+            },
+          });
+          this.#pendingStartInput = null;
+        }
       }
       return;
     }

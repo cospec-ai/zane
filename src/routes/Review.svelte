@@ -463,6 +463,7 @@
         font-size: var(--text-sm);
     }
 
+
     .review-header-inner {
         display: flex;
         align-items: center;
