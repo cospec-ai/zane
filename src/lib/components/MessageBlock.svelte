@@ -2,12 +2,15 @@
   import type { Message } from "../types";
   import OutputBlock from "./OutputBlock.svelte";
   import ShimmerDot from "./ShimmerDot.svelte";
+  import Reasoning from "./Reasoning.svelte";
 
   interface Props {
     message: Message;
   }
 
   let { message }: Props = $props();
+
+  const isReasoning = $derived(message.role === "assistant" && message.kind === "reasoning");
 
   const prefixConfig = $derived.by(() => {
     if (message.role === "user") {
@@ -52,7 +55,12 @@
 </script>
 
 <div class="message-block {prefixConfig.bgClass}">
-  {#if isToolOutput && commandInfo}
+  {#if isReasoning}
+    <Reasoning
+      content={message.text}
+      defaultOpen={false}
+    />
+  {:else if isToolOutput && commandInfo}
     <OutputBlock
       text={commandInfo.output}
       command={commandInfo.command}
@@ -78,7 +86,7 @@
       </div>
     </div>
   {:else}
-    <div class="message-line" class:reasoning={message.kind === "reasoning"}>
+    <div class="message-line">
       <span class="prefix" style:color={prefixConfig.color}>{prefixConfig.prefix}</span>
       <span class="text">{message.text}</span>
     </div>
@@ -103,11 +111,6 @@
     display: flex;
     align-items: flex-start;
     gap: var(--space-sm);
-  }
-
-  .message-line.reasoning {
-    font-style: italic;
-    color: var(--cli-text-dim);
   }
 
   .message-line.terminal {
@@ -145,10 +148,6 @@
     color: var(--cli-text);
     white-space: pre-wrap;
     word-break: break-word;
-  }
-
-  .message-line.reasoning .text {
-    color: var(--cli-text-dim);
   }
 
   .text.dim {

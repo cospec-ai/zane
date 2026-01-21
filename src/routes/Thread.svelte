@@ -7,6 +7,7 @@
     import MessageBlock from "../lib/components/MessageBlock.svelte";
     import ApprovalPrompt from "../lib/components/ApprovalPrompt.svelte";
     import WorkingStatus from "../lib/components/WorkingStatus.svelte";
+    import Reasoning from "../lib/components/Reasoning.svelte";
     import "../lib/styles/tokens.css";
 
     let input = $state("");
@@ -86,7 +87,15 @@
                 {/if}
             {/each}
 
-            {#if messages.turnStatus === "InProgress"}
+            {#if messages.isReasoningStreaming}
+                <Reasoning
+                    content={messages.streamingReasoningText}
+                    isStreaming={true}
+                    defaultOpen={true}
+                />
+            {/if}
+
+            {#if messages.turnStatus === "InProgress" && !messages.isReasoningStreaming}
                 <WorkingStatus
                     detail={messages.statusDetail ?? messages.planExplanation}
                     plan={messages.plan}

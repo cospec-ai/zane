@@ -20,6 +20,10 @@ class MessagesStore {
   #reasoningByThread = new Map<string, ReasoningState>();
   #execCommands = new Map<string, string>();
 
+  // Streaming reasoning state (reactive)
+  #streamingReasoningText = $state<string>("");
+  #isReasoningStreaming = $state<boolean>(false);
+
   // Turn state
   #currentTurnId = $state<string | null>(null);
   #currentTurnStatus = $state<TurnStatus | null>(null);
@@ -32,6 +36,8 @@ class MessagesStore {
   get plan() { return this.#currentPlan; }
   get planExplanation() { return this.#planExplanation; }
   get statusDetail() { return this.#statusDetail; }
+  get isReasoningStreaming() { return this.#isReasoningStreaming; }
+  get streamingReasoningText() { return this.#streamingReasoningText; }
 
   clearThread(threadId: string) {
     this.#byThread.delete(threadId);
@@ -211,6 +217,8 @@ class MessagesStore {
 
   #resetReasoningState(threadId: string) {
     this.#reasoningByThread.set(threadId, { buffer: "", full: "", mode: null, header: null });
+    this.#isReasoningStreaming = false;
+    this.#streamingReasoningText = "";
   }
 
   #appendReasoningDelta(threadId: string, delta: string, mode: ReasoningMode) {
@@ -219,7 +227,13 @@ class MessagesStore {
     if (!state.mode || mode === "raw") {
       state.mode = mode;
     }
+
     state.buffer += delta;
+
+    // Update reactive streaming state
+    this.#isReasoningStreaming = true;
+    this.#streamingReasoningText = state.full + state.buffer;
+
     const header = this.#extractFirstBold(state.buffer);
     if (header) {
       state.header = header;
@@ -234,6 +248,7 @@ class MessagesStore {
       state.buffer = "";
     }
     state.full += "\n\n";
+    this.#streamingReasoningText = state.full;
   }
 
   #finaliseReasoning(threadId: string, item: Record<string, unknown>) {
@@ -245,9 +260,14 @@ class MessagesStore {
 
     const fromItem = this.#reasoningTextFromItem(item);
     const full = state.full.trim().length > 0 ? state.full : fromItem;
+
     state.full = "";
     state.mode = null;
     state.header = null;
+
+    // Reset streaming state
+    this.#isReasoningStreaming = false;
+    this.#streamingReasoningText = "";
 
     const summary = this.#extractReasoningSummary(full);
     if (!summary) return;
