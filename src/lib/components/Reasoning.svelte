@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from "svelte";
   import ShimmerText from "./ShimmerText.svelte";
 
   interface Props {
@@ -16,7 +17,7 @@
     defaultOpen = true
   }: Props = $props();
 
-  let isOpen = $state(defaultOpen);
+  let isOpen = $state(untrack(() => defaultOpen));
   let hasAutoClosed = $state(false);
   let wasStreaming = $state(false);
 

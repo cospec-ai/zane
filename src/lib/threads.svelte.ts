@@ -1,20 +1,56 @@
-import type { ThreadInfo, RpcMessage } from "./types";
+import type { ReasoningEffort, SandboxMode, ThreadInfo, RpcMessage, ThreadSettings } from "./types";
 import { socket } from "./socket.svelte";
 import { messages } from "./messages.svelte";
 import { navigate } from "../router";
 
 const STORE_KEY = "__zane_threads_store__";
+const SETTINGS_STORAGE_KEY = "zane_thread_settings";
+
+const DEFAULT_SETTINGS: ThreadSettings = {
+  model: "",
+  reasoningEffort: "medium",
+  sandbox: "workspace-write",
+};
 
 class ThreadsStore {
   list = $state<ThreadInfo[]>([]);
   currentId = $state<string | null>(null);
   loading = $state(false);
 
+  #settings = $state<Map<string, ThreadSettings>>(new Map());
   #pendingRequests = new Map<number, string>();
   #pendingStartInput: string | null = null;
 
+  constructor() {
+    this.#loadSettings();
+  }
+
   get current(): ThreadInfo | undefined {
     return this.list.find((t) => t.id === this.currentId);
+  }
+
+  get defaultSettings(): ThreadSettings {
+    return { ...DEFAULT_SETTINGS };
+  }
+
+  getSettings(threadId: string | null): ThreadSettings {
+    if (!threadId) return { ...DEFAULT_SETTINGS };
+    const settings = this.#settings.get(threadId);
+    return settings ? { ...settings } : { ...DEFAULT_SETTINGS };
+  }
+
+  updateSettings(threadId: string, update: Partial<ThreadSettings>) {
+    const current = this.#settings.get(threadId) ?? DEFAULT_SETTINGS;
+    const next: ThreadSettings = { ...current, ...update };
+    if (
+      current.model === next.model &&
+      current.reasoningEffort === next.reasoningEffort &&
+      current.sandbox === next.sandbox
+    ) {
+      return;
+    }
+    this.#settings = new Map(this.#settings).set(threadId, next);
+    this.#saveSettings();
   }
 
   fetch() {
@@ -72,6 +108,12 @@ class ThreadsStore {
     if (this.currentId === threadId) {
       this.currentId = null;
     }
+    if (this.#settings.has(threadId)) {
+      const next = new Map(this.#settings);
+      next.delete(threadId);
+      this.#settings = next;
+      this.#saveSettings();
+    }
   }
 
   handleMessage(msg: RpcMessage) {
@@ -109,6 +151,75 @@ class ThreadsStore {
       if (type === "resume") {
         this.loading = false;
       }
+
+      if (type === "start" && msg.result) {
+        const result = msg.result as {
+          thread?: ThreadInfo;
+          model?: string;
+          reasoningEffort?: ReasoningEffort;
+          sandbox?: { type?: string } | string;
+        };
+        const threadId = result.thread?.id;
+        if (threadId) {
+          const sandbox = this.#normalizeSandbox(result.sandbox);
+          this.updateSettings(threadId, {
+            model: result.model ?? "",
+            reasoningEffort: result.reasoningEffort ?? DEFAULT_SETTINGS.reasoningEffort,
+            ...(sandbox ? { sandbox } : {}),
+          });
+        }
+      }
+    }
+  }
+
+  #normalizeSandbox(input: unknown): SandboxMode | null {
+    if (!input) return null;
+    if (typeof input === "string") {
+      if (input === "read-only" || input === "workspace-write" || input === "danger-full-access") {
+        return input;
+      }
+      const lower = input.toLowerCase();
+      if (lower.includes("readonly")) return "read-only";
+      if (lower.includes("workspace")) return "workspace-write";
+      if (lower.includes("danger") || lower.includes("full")) return "danger-full-access";
+      return null;
+    }
+    if (typeof input === "object") {
+      const type = (input as { type?: string }).type;
+      if (!type) return null;
+      if (type === "readOnly") return "read-only";
+      if (type === "workspaceWrite") return "workspace-write";
+      if (type === "dangerFullAccess") return "danger-full-access";
+      return this.#normalizeSandbox(type);
+    }
+    return null;
+  }
+
+  #loadSettings() {
+    try {
+      const saved = localStorage.getItem(SETTINGS_STORAGE_KEY);
+      if (!saved) return;
+      const data = JSON.parse(saved) as Record<string, ThreadSettings>;
+      const next = new Map<string, ThreadSettings>();
+      for (const [threadId, settings] of Object.entries(data)) {
+        if (!threadId) continue;
+        next.set(threadId, { ...DEFAULT_SETTINGS, ...settings });
+      }
+      this.#settings = next;
+    } catch {
+      // ignore
+    }
+  }
+
+  #saveSettings() {
+    try {
+      const data: Record<string, ThreadSettings> = {};
+      for (const [threadId, settings] of this.#settings) {
+        data[threadId] = settings;
+      }
+      localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(data));
+    } catch {
+      // ignore
     }
   }
 }

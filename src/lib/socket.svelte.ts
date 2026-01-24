@@ -1,21 +1,14 @@
 import type { ConnectionStatus, RpcMessage } from "./types";
 
-const CLIENT_INFO = {
-  name: "zane_web",
-  title: "Zane Web Client",
-  version: "0.1.0",
-};
-
-const STORE_KEY = "__zane_socket_store__";
-
 class SocketStore {
   status = $state<ConnectionStatus>("disconnected");
   error = $state<string | null>(null);
 
   #socket: WebSocket | null = null;
-  #url = $state("");
-  #token = $state("");
+  #url = "";
+  #token = "";
   #messageHandlers = new Set<(msg: RpcMessage) => void>();
+  #connectHandlers = new Set<() => void>();
 
   get url() {
     return this.#url;
@@ -44,7 +37,7 @@ class SocketStore {
 
     this.#socket.onopen = () => {
       this.status = "connected";
-      this.#sendInitialize();
+      this.#notifyConnect();
     };
 
     this.#socket.onclose = () => {
@@ -60,7 +53,7 @@ class SocketStore {
     this.#socket.onmessage = (event) => {
       try {
         const msg = JSON.parse(event.data) as RpcMessage;
-        this.#notifyHandlers(msg);
+        this.#notifyMessage(msg);
       } catch {
         console.error("Failed to parse message:", event.data);
       }
@@ -86,28 +79,26 @@ class SocketStore {
     return () => this.#messageHandlers.delete(handler);
   }
 
-  #sendInitialize() {
-    this.send({
-      method: "initialize",
-      id: 1,
-      params: { clientInfo: CLIENT_INFO },
-    });
-    this.send({ method: "initialized", id: 2 });
+  onConnect(handler: () => void) {
+    this.#connectHandlers.add(handler);
+    // If already connected, call immediately
+    if (this.status === "connected") {
+      handler();
+    }
+    return () => this.#connectHandlers.delete(handler);
   }
 
-  #notifyHandlers(msg: RpcMessage) {
+  #notifyMessage(msg: RpcMessage) {
     for (const handler of this.#messageHandlers) {
       handler(msg);
     }
   }
-}
 
-function getStore(): SocketStore {
-  const global = globalThis as Record<string, unknown>;
-  if (!global[STORE_KEY]) {
-    global[STORE_KEY] = new SocketStore();
+  #notifyConnect() {
+    for (const handler of this.#connectHandlers) {
+      handler();
+    }
   }
-  return global[STORE_KEY] as SocketStore;
 }
 
-export const socket = getStore();
+export const socket = new SocketStore();

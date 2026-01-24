@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from "svelte";
   import type { Message } from "../types";
 
   interface Props {
@@ -8,7 +9,7 @@
 
   let { message, defaultOpen = false }: Props = $props();
 
-  let isOpen = $state(defaultOpen);
+  let isOpen = $state(untrack(() => defaultOpen));
 
   function toggle() {
     isOpen = !isOpen;

@@ -1,16 +1,21 @@
 <script lang="ts">
+    import type { ReasoningEffort, SandboxMode } from "../lib/types";
     import { route } from "../router";
     import { socket } from "../lib/socket.svelte";
     import { threads } from "../lib/threads.svelte";
     import { messages } from "../lib/messages.svelte";
+    import { models } from "../lib/models.svelte";
     import SessionHeader from "../lib/components/SessionHeader.svelte";
     import MessageBlock from "../lib/components/MessageBlock.svelte";
     import ApprovalPrompt from "../lib/components/ApprovalPrompt.svelte";
     import WorkingStatus from "../lib/components/WorkingStatus.svelte";
     import Reasoning from "../lib/components/Reasoning.svelte";
+    import PromptInput from "../lib/components/PromptInput.svelte";
     import "../lib/styles/tokens.css";
 
-    let input = $state("");
+    let model = $state("");
+    let reasoningEffort = $state<ReasoningEffort>("medium");
+    let sandbox = $state<SandboxMode>("workspace-write");
     let container: HTMLDivElement | undefined;
     let turnStartTime = $state<number | undefined>(undefined);
 
@@ -20,6 +25,19 @@
         if (threadId && socket.status === "connected" && threads.currentId !== threadId) {
             threads.open(threadId);
         }
+    });
+
+    $effect(() => {
+        if (!threadId) return;
+        const settings = threads.getSettings(threadId);
+        model = settings.model;
+        reasoningEffort = settings.reasoningEffort;
+        sandbox = settings.sandbox;
+    });
+
+    $effect(() => {
+        if (!threadId) return;
+        threads.updateSettings(threadId, { model, reasoningEffort, sandbox });
     });
 
     $effect(() => {
@@ -37,27 +55,29 @@
         }
     });
 
-    function handleSubmit(e: Event) {
-        e.preventDefault();
-        if (!input.trim() || !threadId) return;
+    function handleSubmit(inputText: string) {
+        if (!inputText || !threadId) return;
+
+        const params: Record<string, unknown> = {
+            threadId,
+            input: [{ type: "text", text: inputText }],
+        };
+
+        if (model.trim()) {
+            params.model = model.trim();
+        }
+        if (reasoningEffort) {
+            params.reasoningEffort = reasoningEffort;
+        }
+        if (sandbox) {
+            params.sandbox = sandbox;
+        }
 
         socket.send({
             method: "turn/start",
             id: Date.now(),
-            params: {
-                threadId,
-                input: [{ type: "text", text: input.trim() }],
-            },
+            params,
         });
-
-        input = "";
-    }
-
-    function handleKeydown(e: KeyboardEvent) {
-        if (e.key === "Enter" && !e.shiftKey) {
-            e.preventDefault();
-            handleSubmit(e);
-        }
     }
 </script>
 
@@ -65,6 +85,8 @@
     <SessionHeader
         status={socket.status}
         threadId={threadId}
+        {sandbox}
+        onSandboxChange={(v) => sandbox = v}
     />
 
     <div class="transcript" bind:this={container}>
@@ -105,18 +127,16 @@
         {/if}
     </div>
 
-    <form class="input-area" onsubmit={handleSubmit}>
-        <span class="prompt">&gt;</span>
-        <textarea
-            bind:value={input}
-            onkeydown={handleKeydown}
-            placeholder="Type a message..."
-            rows="1"
-        ></textarea>
-        <button type="submit" class="send-btn" disabled={!input.trim()}>
-            Send
-        </button>
-    </form>
+    <PromptInput
+        {model}
+        {reasoningEffort}
+        modelOptions={models.options}
+        modelsLoading={models.status === "loading"}
+        disabled={messages.turnStatus === "InProgress"}
+        onSubmit={handleSubmit}
+        onModelChange={(v) => model = v}
+        onReasoningChange={(v) => reasoningEffort = v}
+    />
 </div>
 
 <style>
@@ -150,67 +170,5 @@
 
     .empty-text {
         color: var(--cli-text-muted);
-    }
-
-    /* Input area */
-    .input-area {
-        display: flex;
-        align-items: flex-start;
-        gap: var(--space-sm);
-        padding: var(--space-sm) var(--space-md);
-        border-top: 1px solid var(--cli-border);
-        background: var(--cli-bg-elevated);
-    }
-
-    .prompt {
-        font-family: var(--font-mono);
-        font-size: var(--text-sm);
-        color: var(--cli-prefix-agent);
-        padding-top: var(--space-sm);
-        font-weight: 600;
-    }
-
-    textarea {
-        flex: 1;
-        padding: var(--space-sm);
-        font-family: var(--font-mono);
-        font-size: var(--text-sm);
-        line-height: 1.5;
-        color: var(--cli-text);
-        background: transparent;
-        border: none;
-        resize: none;
-        min-height: 1.5em;
-        max-height: 10em;
-        field-sizing: content;
-    }
-
-    textarea:focus {
-        outline: none;
-    }
-
-    textarea::placeholder {
-        color: var(--cli-text-muted);
-    }
-
-    .send-btn {
-        padding: var(--space-sm) var(--space-md);
-        font-family: var(--font-mono);
-        font-size: var(--text-sm);
-        color: var(--cli-bg);
-        background: var(--cli-prefix-agent);
-        border: none;
-        border-radius: var(--radius-sm);
-        cursor: pointer;
-        transition: opacity var(--transition-fast);
-    }
-
-    .send-btn:hover:not(:disabled) {
-        opacity: 0.9;
-    }
-
-    .send-btn:disabled {
-        opacity: 0.3;
-        cursor: not-allowed;
     }
 </style>

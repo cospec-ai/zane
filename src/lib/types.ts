@@ -7,6 +7,20 @@ export interface ThreadInfo {
   modelProvider?: string;
 }
 
+export interface ModelOption {
+  value: string;
+  label: string;
+}
+
+export type ReasoningEffort = "low" | "medium" | "high";
+export type SandboxMode = "read-only" | "workspace-write" | "danger-full-access";
+
+export interface ThreadSettings {
+  model: string;
+  reasoningEffort: ReasoningEffort;
+  sandbox: SandboxMode;
+}
+
 export type MessageRole = "user" | "assistant" | "tool" | "approval";
 export type MessageKind =
   | "reasoning"
