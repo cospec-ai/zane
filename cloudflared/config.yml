@@ -1,7 +1,0 @@
-tunnel: github-webhooks
-credentials-file: /etc/cloudflared/cdb94c6c-f44f-46ef-ace3-07362e4b9798.json
-
-ingress:
-  - hostname: woeiexunbm.zainsiddiqi.com
-    service: http://server:3000
-  - service: http_status:404
