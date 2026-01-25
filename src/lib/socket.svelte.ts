@@ -1,26 +1,49 @@
 import type { ConnectionStatus, RpcMessage } from "./types";
 import { DEFAULT_WS_URL } from "./config.svelte";
 
+const HEARTBEAT_INTERVAL = 30_000;
+const HEARTBEAT_TIMEOUT = 10_000;
+const RECONNECT_DELAY = 2_000;
+
+export interface SendResult {
+  success: boolean;
+  error?: string;
+}
+
 class SocketStore {
   status = $state<ConnectionStatus>("disconnected");
   error = $state<string | null>(null);
 
   #socket: WebSocket | null = null;
   #url = "";
+  #token: string | null = null;
   #messageHandlers = new Set<(msg: RpcMessage) => void>();
   #connectHandlers = new Set<() => void>();
+  #heartbeatInterval: ReturnType<typeof setInterval> | null = null;
+  #heartbeatTimeout: ReturnType<typeof setTimeout> | null = null;
+  #intentionalDisconnect = false;
 
   get url() {
     return this.#url;
   }
 
+  get isHealthy() {
+    return this.status === "connected" && this.#socket?.readyState === WebSocket.OPEN;
+  }
+
   connect(url: string, token?: string | null) {
+    this.#intentionalDisconnect = false;
+    this.#connect(url, token ?? null);
+  }
+
+  #connect(url: string, token: string | null) {
     if (this.#socket) {
-      this.disconnect();
+      this.#cleanup();
     }
 
     const trimmed = url.trim() || DEFAULT_WS_URL;
     this.#url = trimmed;
+    this.#token = token;
     this.status = "connecting";
     this.error = null;
 
@@ -32,29 +55,54 @@ class SocketStore {
       this.#socket = new WebSocket(wsUrl);
     } catch {
       this.status = "error";
-      this.error = "Invalid server URL";
+      this.error = `Invalid URL: ${trimmed}`;
       return;
     }
 
     this.#socket.onopen = () => {
       this.status = "connected";
-      this.#notifyConnect();
+      this.error = null;
+      this.#startHeartbeat();
+      for (const handler of this.#connectHandlers) {
+        handler();
+      }
     };
 
-    this.#socket.onclose = () => {
-      this.status = "disconnected";
+    this.#socket.onclose = (event) => {
+      this.#stopHeartbeat();
       this.#socket = null;
+
+      if (this.#intentionalDisconnect) {
+        this.status = "disconnected";
+        return;
+      }
+
+      this.status = "reconnecting";
+      this.error = event.reason || "Connection lost";
+      setTimeout(() => {
+        if (!this.#intentionalDisconnect) {
+          this.#connect(this.#url, this.#token);
+        }
+      }, RECONNECT_DELAY);
     };
 
     this.#socket.onerror = () => {
-      this.status = "error";
-      this.error = "Connection failed";
+      if (this.status === "connecting") {
+        this.error = "Failed to connect";
+      }
     };
 
     this.#socket.onmessage = (event) => {
+      if (event.data === "pong" || event.data === '{"type":"pong"}') {
+        this.#clearHeartbeatTimeout();
+        return;
+      }
+
       try {
         const msg = JSON.parse(event.data) as RpcMessage;
-        this.#notifyMessage(msg);
+        for (const handler of this.#messageHandlers) {
+          handler(msg);
+        }
       } catch {
         console.error("Failed to parse message:", event.data);
       }
@@ -62,16 +110,22 @@ class SocketStore {
   }
 
   disconnect() {
-    if (this.#socket) {
-      this.#socket.close();
-      this.#socket = null;
-    }
+    this.#intentionalDisconnect = true;
+    this.#cleanup();
     this.status = "disconnected";
+    this.error = null;
   }
 
-  send(message: RpcMessage) {
-    if (this.#socket?.readyState === WebSocket.OPEN) {
+  send(message: RpcMessage): SendResult {
+    if (!this.#socket || this.#socket.readyState !== WebSocket.OPEN) {
+      return { success: false, error: "Not connected" };
+    }
+
+    try {
       this.#socket.send(JSON.stringify(message));
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e instanceof Error ? e.message : "Send failed" };
     }
   }
 
@@ -82,22 +136,58 @@ class SocketStore {
 
   onConnect(handler: () => void) {
     this.#connectHandlers.add(handler);
-    // If already connected, call immediately
-    if (this.status === "connected") {
-      handler();
-    }
+    if (this.status === "connected") handler();
     return () => this.#connectHandlers.delete(handler);
   }
 
-  #notifyMessage(msg: RpcMessage) {
-    for (const handler of this.#messageHandlers) {
-      handler(msg);
+  reconnect() {
+    if (this.status === "connected") return;
+    this.#connect(this.#url, this.#token);
+  }
+
+  #startHeartbeat() {
+    this.#stopHeartbeat();
+    this.#heartbeatInterval = setInterval(() => {
+      if (this.#socket?.readyState === WebSocket.OPEN) {
+        try {
+          this.#socket.send(JSON.stringify({ type: "ping" }));
+          this.#heartbeatTimeout = setTimeout(() => {
+            console.warn("Heartbeat timeout");
+            this.#socket?.close();
+          }, HEARTBEAT_TIMEOUT);
+        } catch {
+          this.#socket?.close();
+        }
+      }
+    }, HEARTBEAT_INTERVAL);
+  }
+
+  #stopHeartbeat() {
+    if (this.#heartbeatInterval) {
+      clearInterval(this.#heartbeatInterval);
+      this.#heartbeatInterval = null;
+    }
+    this.#clearHeartbeatTimeout();
+  }
+
+  #clearHeartbeatTimeout() {
+    if (this.#heartbeatTimeout) {
+      clearTimeout(this.#heartbeatTimeout);
+      this.#heartbeatTimeout = null;
     }
   }
 
-  #notifyConnect() {
-    for (const handler of this.#connectHandlers) {
-      handler();
+  #cleanup() {
+    this.#stopHeartbeat();
+    if (this.#socket) {
+      this.#socket.onopen = null;
+      this.#socket.onclose = null;
+      this.#socket.onerror = null;
+      this.#socket.onmessage = null;
+      if (this.#socket.readyState === WebSocket.OPEN || this.#socket.readyState === WebSocket.CONNECTING) {
+        this.#socket.close();
+      }
+      this.#socket = null;
     }
   }
 }

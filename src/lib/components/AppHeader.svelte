@@ -22,6 +22,7 @@
     const statusConfig: Record<ConnectionStatus, { icon: string; color: string; label: string }> = {
         connected: { icon: "●", color: "var(--cli-success)", label: "connected" },
         connecting: { icon: "○", color: "var(--cli-text-dim)", label: "connecting" },
+        reconnecting: { icon: "◐", color: "var(--cli-warning)", label: "reconnecting" },
         disconnected: { icon: "○", color: "var(--cli-text-dim)", label: "disconnected" },
         error: { icon: "✗", color: "var(--cli-error)", label: "error" },
     };
@@ -46,11 +47,19 @@
     }
 
     function handleStatusClick() {
-        if (status === "connecting" || status === "connected") {
+        if (status === "connecting" || status === "connected" || status === "reconnecting") {
             socket.disconnect();
         } else {
             socket.connect(config.url, auth.token);
         }
+    }
+
+    function getStatusTitle(): string {
+        if (status === "connected") return "Disconnect";
+        if (status === "connecting") return "Connecting...";
+        if (status === "reconnecting") return "Reconnecting... Click to cancel";
+        if (status === "error" && socket.error) return socket.error;
+        return "Connect";
     }
 </script>
 
@@ -64,10 +73,9 @@
             type="button"
             class="status-btn"
             onclick={handleStatusClick}
-            disabled={status === "connecting"}
-            title={status === "connected" ? "Disconnect" : "Connect"}
+            title={getStatusTitle()}
         >
-            {#if status === "connecting"}
+            {#if status === "connecting" || status === "reconnecting"}
                 <ShimmerDot color={statusMeta.color} />
             {:else}
                 <span class="status-icon" style:color={statusMeta.color}>{statusMeta.icon}</span>
@@ -207,10 +215,6 @@
         background: transparent;
         border: none;
         cursor: pointer;
-    }
-
-    .status-btn:disabled {
-        cursor: default;
     }
 
     .thread-id {
