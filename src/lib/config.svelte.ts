@@ -1,13 +1,11 @@
 const STORE_KEY = "__zane_config_store__";
 const STORAGE_KEY = "zane_config";
-export const DEFAULT_WS_URL = "";
-
 interface SavedConfig {
   url: string;
 }
 
 class ConfigStore {
-  #url = $state(DEFAULT_WS_URL);
+  #url = $state("");
 
   constructor() {
     this.#load();

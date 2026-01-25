@@ -6,7 +6,9 @@ const ORBIT_URL = process.env.ANCHOR_ORBIT_URL ?? "";
 const ZANE_ANCHOR_JWT_SECRET = process.env.ZANE_ANCHOR_JWT_SECRET ?? "";
 const ANCHOR_APP_CWD = process.env.ANCHOR_APP_CWD ?? process.cwd();
 const ANCHOR_JWT_TTL_SEC = Number(process.env.ANCHOR_JWT_TTL_SEC ?? 300);
-const ORBIT_RECONNECT_MS = Number(process.env.ANCHOR_ORBIT_RECONNECT_MS ?? 2000);
+const ORBIT_RECONNECT_DELAY_MS = 2000;
+const ORBIT_HEARTBEAT_INTERVAL_MS = 30000;
+const ORBIT_HEARTBEAT_TIMEOUT_MS = 10000;
 
 if (ORBIT_URL && !ZANE_ANCHOR_JWT_SECRET) {
   console.error("[anchor] ZANE_ANCHOR_JWT_SECRET is required when ANCHOR_ORBIT_URL is set");
@@ -18,6 +20,8 @@ let appServer: Bun.Subprocess | null = null;
 let appServerStarting = false;
 let orbitSocket: WebSocket | null = null;
 let orbitConnecting = false;
+let orbitHeartbeatInterval: ReturnType<typeof setInterval> | null = null;
+let orbitHeartbeatTimeout: ReturnType<typeof setTimeout> | null = null;
 let warnedNoAppServer = false;
 let appServerInitialized = false;
 
@@ -182,6 +186,34 @@ async function buildOrbitUrl(): Promise<string | null> {
   }
 }
 
+function stopOrbitHeartbeat(): void {
+  if (orbitHeartbeatInterval) {
+    clearInterval(orbitHeartbeatInterval);
+    orbitHeartbeatInterval = null;
+  }
+  if (orbitHeartbeatTimeout) {
+    clearTimeout(orbitHeartbeatTimeout);
+    orbitHeartbeatTimeout = null;
+  }
+}
+
+function startOrbitHeartbeat(ws: WebSocket): void {
+  stopOrbitHeartbeat();
+  orbitHeartbeatInterval = setInterval(() => {
+    if (ws.readyState === WebSocket.OPEN) {
+      try {
+        ws.send(JSON.stringify({ type: "ping" }));
+        orbitHeartbeatTimeout = setTimeout(() => {
+          console.warn("[anchor] heartbeat timeout");
+          ws.close();
+        }, ORBIT_HEARTBEAT_TIMEOUT_MS);
+      } catch {
+        ws.close();
+      }
+    }
+  }, ORBIT_HEARTBEAT_INTERVAL_MS);
+}
+
 async function connectOrbit(): Promise<void> {
   let url: string | null = null;
   try {
@@ -199,17 +231,12 @@ async function connectOrbit(): Promise<void> {
 
   ws.addEventListener("open", () => {
     orbitConnecting = false;
-    ws.send(
-      JSON.stringify({
-        type: "anchor.hello",
-        ts: new Date().toISOString(),
-      })
-    );
+    ws.send(JSON.stringify({ type: "anchor.hello", ts: new Date().toISOString() }));
     console.log("[anchor] connected to orbit");
+    startOrbitHeartbeat(ws);
   });
 
   ws.addEventListener("message", (event) => {
-    ensureAppServer();
     const text =
       typeof event.data === "string"
         ? event.data
@@ -217,24 +244,32 @@ async function connectOrbit(): Promise<void> {
           ? new TextDecoder().decode(event.data)
           : new TextDecoder().decode(event.data as ArrayBuffer);
 
-    const message = parseJsonRpcMessage(text);
+    if (text === "pong" || text === '{"type":"pong"}') {
+      if (orbitHeartbeatTimeout) {
+        clearTimeout(orbitHeartbeatTimeout);
+        orbitHeartbeatTimeout = null;
+      }
+      return;
+    }
 
-    // Forward JSON-RPC messages to app-server
+    ensureAppServer();
+    const message = parseJsonRpcMessage(text);
     if (message && ("method" in message || "id" in message)) {
       sendToAppServer(text.trim() + "\n");
     }
   });
 
   ws.addEventListener("close", () => {
+    stopOrbitHeartbeat();
     orbitSocket = null;
     orbitConnecting = false;
-    setTimeout(() => void connectOrbit(), ORBIT_RECONNECT_MS);
+    setTimeout(() => void connectOrbit(), ORBIT_RECONNECT_DELAY_MS);
   });
 
   ws.addEventListener("error", () => {
+    stopOrbitHeartbeat();
     orbitSocket = null;
     orbitConnecting = false;
-    setTimeout(() => void connectOrbit(), ORBIT_RECONNECT_MS);
   });
 }
 

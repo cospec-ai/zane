@@ -50,7 +50,6 @@
         }
     });
 
-    // Track turn start time for elapsed timer
     $effect(() => {
         if (messages.turnStatus === "InProgress" && !turnStartTime) {
             turnStartTime = Date.now();
@@ -59,8 +58,12 @@
         }
     });
 
+    let sendError = $state<string | null>(null);
+
     function handleSubmit(inputText: string) {
         if (!inputText || !threadId) return;
+
+        sendError = null;
 
         const params: Record<string, unknown> = {
             threadId,
@@ -77,12 +80,22 @@
             params.sandbox = sandbox;
         }
 
-        socket.send({
+        const result = socket.send({
             method: "turn/start",
             id: Date.now(),
             params,
         });
+
+        if (!result.success) {
+            sendError = result.error ?? "Failed to send message";
+        }
     }
+
+    $effect(() => {
+        if (socket.status === "connected") {
+            sendError = null;
+        }
+    });
 </script>
 
 <div class="thread-page">
@@ -137,6 +150,20 @@
                 />
             {/if}
         {/if}
+
+        {#if sendError || (socket.status !== "connected" && socket.status !== "connecting" && socket.error)}
+            <div class="connection-error">
+                <span class="error-icon">!</span>
+                <span class="error-text">{sendError || socket.error}</span>
+                {#if socket.status === "reconnecting"}
+                    <span class="error-hint">Reconnecting automatically...</span>
+                {:else if socket.status === "error" || socket.status === "disconnected"}
+                    <button type="button" class="retry-btn" onclick={() => socket.reconnect()}>
+                        Retry
+                    </button>
+                {/if}
+            </div>
+        {/if}
     </div>
 
     <PromptInput
@@ -144,7 +171,7 @@
         {reasoningEffort}
         modelOptions={models.options}
         modelsLoading={models.status === "loading"}
-        disabled={messages.turnStatus === "InProgress"}
+        disabled={messages.turnStatus === "InProgress" || !socket.isHealthy}
         onSubmit={handleSubmit}
         onModelChange={(v) => model = v}
         onReasoningChange={(v) => reasoningEffort = v}
@@ -182,5 +209,59 @@
 
     .empty-text {
         color: var(--cli-text-muted);
+    }
+
+    .connection-error {
+        display: flex;
+        align-items: center;
+        gap: var(--space-sm);
+        margin: var(--space-sm) var(--space-md);
+        padding: var(--space-sm) var(--space-md);
+        background: rgba(220, 38, 38, 0.1);
+        border: 1px solid var(--cli-error);
+        border-radius: var(--radius-md);
+        font-family: var(--font-mono);
+        font-size: var(--text-sm);
+    }
+
+    .error-icon {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 1.25rem;
+        height: 1.25rem;
+        background: var(--cli-error);
+        color: white;
+        border-radius: 50%;
+        font-size: var(--text-xs);
+        font-weight: bold;
+        flex-shrink: 0;
+    }
+
+    .error-text {
+        color: var(--cli-error);
+        flex: 1;
+    }
+
+    .error-hint {
+        color: var(--cli-text-muted);
+        font-size: var(--text-xs);
+    }
+
+    .retry-btn {
+        padding: var(--space-xs) var(--space-sm);
+        background: transparent;
+        border: 1px solid var(--cli-error);
+        border-radius: var(--radius-sm);
+        color: var(--cli-error);
+        font-family: var(--font-mono);
+        font-size: var(--text-xs);
+        cursor: pointer;
+        transition: all var(--transition-fast);
+    }
+
+    .retry-btn:hover {
+        background: var(--cli-error);
+        color: white;
     }
 </style>

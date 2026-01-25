@@ -61,6 +61,7 @@
   --cli-prefix-image: #db2777;
   --cli-prefix-review: #6366f1;
   --cli-success: #16a34a;
+  --cli-warning: #d97706;
   --cli-error: #dc2626;
   --cli-border: #e5e7eb;
   --cli-bg-hover: #f3f4f6;
@@ -122,6 +123,7 @@
     --cli-prefix-image: #f472b6;
     --cli-prefix-review: #818cf8;
     --cli-success: #4ade80;
+    --cli-warning: #fbbf24;
     --cli-error: #f87171;
     --cli-border: #374151;
     --cli-bg-hover: #2d2d2d;
@@ -180,6 +182,7 @@
   --cli-prefix-image: #f472b6;
   --cli-prefix-review: #818cf8;
   --cli-success: #4ade80;
+  --cli-warning: #fbbf24;
   --cli-error: #f87171;
   --cli-border: #374151;
   --cli-bg-hover: #2d2d2d;

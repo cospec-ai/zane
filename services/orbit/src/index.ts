@@ -309,6 +309,15 @@ export class OrbitRelay {
     const targets = role === "client" ? this.anchorSockets : this.clientSockets;
     const direction: Direction = role === "client" ? "client" : "server";
 
+    if (role === "client" && this.anchorSockets.size === 0) {
+      try {
+        socket.close(1013, "Anchor offline");
+      } catch {
+        // ignore
+      }
+      return;
+    }
+
     source.add(socket);
 
     socket.send(
@@ -320,6 +329,10 @@ export class OrbitRelay {
     );
 
     socket.addEventListener("message", (event) => {
+      if (this.handlePing(socket, event.data)) {
+        return;
+      }
+
       this.logEvent(event.data, direction);
       for (const target of targets) {
         try {
@@ -341,6 +354,36 @@ export class OrbitRelay {
 
     socket.addEventListener("close", cleanup);
     socket.addEventListener("error", cleanup);
+  }
+
+  private handlePing(socket: WebSocket, data: unknown): boolean {
+    let payload = "";
+    if (typeof data === "string") {
+      payload = data;
+    } else if (data instanceof ArrayBuffer) {
+      payload = new TextDecoder().decode(data);
+    } else if (data instanceof Uint8Array) {
+      payload = new TextDecoder().decode(data);
+    } else {
+      return false;
+    }
+
+    const trimmed = payload.trim();
+    if (trimmed === '{"type":"ping"}' || trimmed === '"ping"') {
+      try {
+        socket.send(JSON.stringify({ type: "pong" }));
+      } catch {}
+      return true;
+    }
+
+    if (trimmed === "ping") {
+      try {
+        socket.send("pong");
+      } catch {}
+      return true;
+    }
+
+    return false;
   }
 
   private async logEvent(data: unknown, direction: Direction): Promise<void> {
