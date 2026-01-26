@@ -1,14 +1,13 @@
 <script lang="ts">
     import type { Snippet } from "svelte";
     import { auth } from "../auth.svelte";
-    import "../styles/tokens.css";
 
     const { children }: { children: Snippet } = $props();
 </script>
 
 {#if auth.status === "loading"}
-    <div class="auth-shell">
-        <div class="auth-card">
+    <div class="auth-shell stack">
+        <div class="auth-card stack">
             <div class="auth-title">Checking session</div>
             <div class="auth-subtitle">Waiting for passkey status...</div>
         </div>
@@ -16,8 +15,8 @@
 {:else if auth.status === "signed_in"}
     {@render children()}
 {:else}
-    <div class="auth-shell">
-        <div class="auth-card">
+    <div class="auth-shell stack">
+        <div class="auth-card stack">
             <div class="auth-title">Passkey required</div>
             <div class="auth-subtitle">Use your passkey to unlock Zane.</div>
 
@@ -50,19 +49,16 @@
         background: var(--cli-bg);
         color: var(--cli-text);
         font-family: var(--font-mono);
-        display: flex;
-        flex-direction: column;
         align-items: center;
         padding: var(--space-xl) var(--space-md);
+        --stack-gap: 0;
     }
 
     .auth-card {
         width: 100%;
         max-width: var(--app-max-width);
         padding: var(--space-md);
-        display: flex;
-        flex-direction: column;
-        gap: var(--space-md);
+        --stack-gap: var(--space-md);
     }
 
     .auth-title {

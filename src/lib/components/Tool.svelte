@@ -103,8 +103,8 @@
 </script>
 
 <div class="tool" class:open={isOpen}>
-  <button class="tool-header" onclick={toggle} type="button">
-    <span class="tool-icon" style:color={toolConfig.color}>
+  <button class="tool-header row" onclick={toggle} type="button">
+    <span class="tool-icon row" style:color={toolConfig.color}>
       {#if toolConfig.icon === "terminal"}
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <polyline points="4 17 10 11 4 5"/>
@@ -149,7 +149,7 @@
 
     <span class="tool-title">{toolInfo.title}</span>
 
-    <span class="tool-status" style:color={statusConfig.color}>
+    <span class="tool-status row" style:color={statusConfig.color}>
       {#if statusConfig.icon === "check"}
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
           <polyline points="20 6 9 17 4 12"/>
@@ -194,9 +194,7 @@
   }
 
   .tool-header {
-    display: flex;
-    align-items: center;
-    gap: var(--space-sm);
+    --row-gap: var(--space-sm);
     width: 100%;
     padding: var(--space-sm) var(--space-md);
     background: var(--cli-bg-elevated);
@@ -214,8 +212,7 @@
   }
 
   .tool-icon {
-    display: flex;
-    align-items: center;
+    --row-gap: 0;
     justify-content: center;
     flex-shrink: 0;
   }
@@ -234,9 +231,7 @@
   }
 
   .tool-status {
-    display: flex;
-    align-items: center;
-    gap: var(--space-xs);
+    --row-gap: var(--space-xs);
     font-size: var(--text-xs);
     flex-shrink: 0;
   }

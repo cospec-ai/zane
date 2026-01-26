@@ -49,26 +49,26 @@
   {:else if isTool}
     <Tool {message} />
   {:else if isWait}
-    <div class="message-line wait">
+    <div class="message-line wait row">
       <span class="prefix" style:color={prefixConfig.color}>{prefixConfig.prefix}</span>
-      <div class="wait-line">
+      <div class="wait-line row">
         <ShimmerDot color="var(--cli-prefix-tool)" />
         <span class="text dim">{message.text}</span>
       </div>
     </div>
   {:else if isTerminal}
-    <div class="message-line terminal">
+    <div class="message-line terminal row">
       <span class="prefix" style:color={prefixConfig.color}>{prefixConfig.prefix}</span>
-      <div class="terminal-lines">
+      <div class="terminal-lines stack">
         {#each terminalLines as line}
-          <div class="terminal-line">
+          <div class="terminal-line row">
             <span class="text">{line}</span>
           </div>
         {/each}
       </div>
     </div>
   {:else}
-    <div class="message-line">
+    <div class="message-line row">
       <span class="prefix" style:color={prefixConfig.color}>{prefixConfig.prefix}</span>
       <span class="text">{message.text}</span>
     </div>
@@ -90,9 +90,8 @@
   }
 
   .message-line {
-    display: flex;
+    --row-gap: var(--space-sm);
     align-items: flex-start;
-    gap: var(--space-sm);
   }
 
   .message-line.terminal {
@@ -104,21 +103,15 @@
   }
 
   .terminal-lines {
-    display: flex;
-    flex-direction: column;
-    gap: 0.1rem;
+    --stack-gap: 0.1rem;
   }
 
   .terminal-line {
-    display: flex;
-    align-items: center;
-    gap: var(--space-sm);
+    --row-gap: var(--space-sm);
   }
 
   .wait-line {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-sm);
+    --row-gap: var(--space-sm);
   }
 
   .prefix {

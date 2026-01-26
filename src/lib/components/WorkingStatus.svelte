@@ -37,7 +37,7 @@
 </script>
 
 <div class="working-status">
-  <div class="status-line">
+  <div class="status-line row">
     <ShimmerDot color="var(--cli-prefix-agent)" />
     <span class="label">Working</span>
     <span class="progress-bar">
@@ -56,7 +56,7 @@
   {#if plan.length > 0}
     <div class="plan-steps">
       {#each plan as step}
-        <div class="plan-step" class:completed={step.status === "Completed"} class:active={step.status === "InProgress"}>
+        <div class="plan-step row" class:completed={step.status === "Completed"} class:active={step.status === "InProgress"}>
           <span class="step-icon">
             {#if step.status === "Completed"}
               ✓
@@ -81,9 +81,7 @@
   }
 
   .status-line {
-    display: flex;
-    align-items: center;
-    gap: var(--space-sm);
+    --row-gap: var(--space-sm);
     color: var(--cli-text);
   }
 
@@ -92,12 +90,12 @@
   }
 
   .progress-bar {
-    width: 100px;
+    width: var(--size-progress-width);
   }
 
   .bar-track {
     display: block;
-    height: 4px;
+    height: var(--size-progress-height);
     background: var(--cli-border);
     border-radius: 2px;
     overflow: hidden;
@@ -140,9 +138,7 @@
   }
 
   .plan-step {
-    display: flex;
-    align-items: center;
-    gap: var(--space-sm);
+    --row-gap: var(--space-sm);
     padding: var(--space-xs) 0;
     color: var(--cli-text-muted);
   }

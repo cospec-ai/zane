@@ -66,12 +66,12 @@
 <svelte:window onclick={handleClickOutside} />
 
 <header class="app-header">
-    <div class="app-header-inner">
+    <div class="app-header-inner row">
         <a href="/" class="brand">zane</a>
         <span class="separator">·</span>
         <button
             type="button"
-            class="status-btn"
+            class="status-btn row"
             onclick={handleStatusClick}
             title={getStatusTitle()}
         >
@@ -92,7 +92,7 @@
             <div class="sandbox-dropdown" class:open={sandboxOpen}>
                 <button
                     type="button"
-                    class="sandbox-btn"
+                    class="sandbox-btn row"
                     class:danger={sandbox === "danger-full-access"}
                     onclick={(e) => {
                         e.stopPropagation();
@@ -112,7 +112,7 @@
                         {#each sandboxOptions as option}
                             <button
                                 type="button"
-                                class="sandbox-item"
+                                class="sandbox-item split"
                                 class:selected={sandbox === option.value}
                                 class:danger={option.value === "danger-full-access"}
                                 onclick={() => {
@@ -136,13 +136,13 @@
         <div class="spacer"></div>
 
         {#if actions}
-            <div class="desktop-actions">
+            <div class="desktop-actions row">
                 {@render actions()}
             </div>
 
             <button
                 type="button"
-                class="hamburger-btn"
+                class="hamburger-btn row"
                 onclick={(e) => {
                     e.stopPropagation();
                     mobileMenuOpen = !mobileMenuOpen;
@@ -162,7 +162,7 @@
     </div>
 
     {#if mobileMenuOpen && actions}
-        <nav class="mobile-menu">
+        <nav class="mobile-menu stack">
             {@render actions()}
         </nav>
     {/if}
@@ -181,9 +181,7 @@
     }
 
     .app-header-inner {
-        display: flex;
-        align-items: center;
-        gap: var(--space-sm);
+        --row-gap: var(--space-sm);
         padding: var(--space-sm) var(--space-md);
         max-width: var(--app-max-width);
         margin: 0 auto;
@@ -209,8 +207,7 @@
     }
 
     .status-btn {
-        display: inline-flex;
-        align-items: center;
+        --row-gap: 0;
         padding: 0;
         background: transparent;
         border: none;
@@ -232,9 +229,7 @@
     }
 
     .sandbox-btn {
-        display: flex;
-        align-items: center;
-        gap: var(--space-xs);
+        --row-gap: var(--space-xs);
         padding: var(--space-xs) var(--space-sm);
         background: transparent;
         border: 1px solid var(--cli-border);
@@ -270,7 +265,7 @@
     }
 
     .sandbox-btn.danger:hover {
-        background: rgba(255, 100, 100, 0.1);
+        background: var(--cli-error-bg);
     }
 
     .shield-icon {
@@ -295,7 +290,7 @@
         background: var(--cli-bg-elevated);
         border: 1px solid var(--cli-border);
         border-radius: var(--radius-md);
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        box-shadow: var(--shadow-popover);
         z-index: 100;
         animation: fadeIn 0.1s ease;
     }
@@ -312,9 +307,7 @@
     }
 
     .sandbox-item {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
+        --split-gap: var(--space-sm);
         width: 100%;
         padding: var(--space-sm);
         background: transparent;
@@ -348,8 +341,7 @@
     /* Desktop actions */
     .desktop-actions {
         display: none;
-        align-items: center;
-        gap: var(--space-sm);
+        --row-gap: var(--space-sm);
     }
 
     @media (min-width: 640px) {
@@ -382,8 +374,6 @@
 
     /* Hamburger button */
     .hamburger-btn {
-        display: flex;
-        align-items: center;
         justify-content: center;
         width: 2rem;
         height: 2rem;
@@ -415,8 +405,6 @@
 
     /* Mobile menu */
     .mobile-menu {
-        display: flex;
-        flex-direction: column;
         position: absolute;
         top: 100%;
         left: 0;
@@ -425,6 +413,7 @@
         border-bottom: 1px solid var(--cli-border);
         z-index: 100;
         animation: slideDown 0.15s ease;
+        --stack-gap: 0;
     }
 
     @keyframes slideDown {

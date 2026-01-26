@@ -75,13 +75,13 @@
   <div class="border-top">┌─ Approval Required ─{"─".repeat(30)}┐</div>
 
   <div class="content">
-    <div class="line">
+    <div class="line row">
       <span class="border">│</span>
       <span class="action-type">{actionLabels[approval.type]}</span>
     </div>
 
     {#if approval.command}
-      <div class="line command">
+      <div class="line command row">
         <span class="border">│</span>
         <span class="prompt">$</span>
         <span class="command-text">{approval.command}</span>
@@ -89,26 +89,26 @@
     {/if}
 
     {#if approval.filePath}
-      <div class="line">
+      <div class="line row">
         <span class="border">│</span>
         <span class="file-path">{approval.filePath}</span>
       </div>
     {/if}
 
     {#if approval.description && approval.description !== approval.command}
-      <div class="line description">
+      <div class="line description row">
         <span class="border">│</span>
         <span class="desc-text">{approval.description}</span>
       </div>
     {/if}
 
-    <div class="line empty"><span class="border">│</span></div>
+    <div class="line empty row"><span class="border">│</span></div>
 
     {#if approval.status === "pending"}
       {#each options as option, i}
         <button
           type="button"
-          class="line option"
+          class="line option row"
           class:selected={i === selectedIndex}
           onclick={() => handleOptionClick(i)}
         >
@@ -119,7 +119,7 @@
         </button>
       {/each}
     {:else}
-      <div class="line status">
+      <div class="line status row">
         <span class="border">│</span>
         <span class="status-text" style:color={statusLabels[approval.status].color}>
           {statusLabels[approval.status].text}
@@ -155,9 +155,8 @@
   }
 
   .line {
-    display: flex;
+    --row-gap: var(--space-sm);
     align-items: baseline;
-    gap: var(--space-sm);
     padding: 1px 0;
     white-space: nowrap;
   }
