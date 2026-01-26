@@ -90,12 +90,11 @@
   onDestroy(() => cleanup());
 </script>
 
-<div class="pierre-diff" bind:this={container}></div>
+<div class="pierre-diff stack" bind:this={container}></div>
 
 <style>
   .pierre-diff {
-    display: grid;
-    gap: var(--space-md);
+    --stack-gap: var(--space-md);
   }
 
   :global(.pierre-fallback) {

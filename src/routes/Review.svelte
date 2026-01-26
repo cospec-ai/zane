@@ -5,7 +5,6 @@
     import { socket } from "../lib/socket.svelte";
     import { theme } from "../lib/theme.svelte";
     import AppHeader from "../lib/components/AppHeader.svelte";
-    import "../lib/styles/tokens.css";
     import PierreDiff from "../lib/components/PierreDiff.svelte";
 
     const themeIcons = { system: "◐", light: "○", dark: "●" } as const;
@@ -250,7 +249,7 @@
     });
 </script>
 
-<div class="review-page">
+<div class="review-page stack">
     <AppHeader status={socket.status} threadId={threadId}>
         {#snippet actions()}
             <a href={`/thread/${threadId}`}>back</a>
@@ -293,12 +292,10 @@
 
 <style>
     .review-page {
-        display: flex;
-        flex-direction: column;
+        --stack-gap: 0;
         height: 100%;
         background: var(--cli-bg);
         color: var(--cli-text);
-        overflow: hidden;
     }
 
     .review-body {
@@ -327,6 +324,7 @@
     }
 
     .turn-header {
+        --split-gap: var(--space-sm);
         list-style: none;
         cursor: pointer;
         padding: var(--space-sm) var(--space-md);

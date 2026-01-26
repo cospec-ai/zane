@@ -43,7 +43,7 @@
 </script>
 
 <div class="reasoning">
-  <button class="reasoning-trigger" onclick={toggle} type="button">
+  <button class="reasoning-trigger row" onclick={toggle} type="button">
     <svg class="brain-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
       <path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/>
       <path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/>
@@ -57,7 +57,9 @@
     </svg>
     <span class="trigger-text">
       {#if isStreaming}
-        <ShimmerText text="Thinking..." duration={1} />
+        <span class="trigger-text-inline">
+          <ShimmerText text="Thinking..." duration={1} />
+        </span>
       {:else}
         Thought for a few seconds
       {/if}
@@ -85,13 +87,10 @@
   .reasoning {
     font-family: var(--font-mono);
     font-size: var(--text-sm);
-    padding: var(--space-xs) var(--space-md);
   }
 
   .reasoning-trigger {
-    display: flex;
-    align-items: center;
-    gap: var(--space-sm);
+    --row-gap: var(--space-sm);
     width: 100%;
     padding: var(--space-xs) 0;
     background: none;
@@ -116,9 +115,15 @@
 
   .trigger-text {
     flex: 1;
+    min-width: 0;
+  }
+
+  .trigger-text-inline {
+    display: inline-block;
   }
 
   .chevron {
+    margin-left: auto;
     width: 1rem;
     height: 1rem;
     flex-shrink: 0;

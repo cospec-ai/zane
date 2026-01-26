@@ -6,7 +6,6 @@
   import { auth } from "../lib/auth.svelte";
   import AppHeader from "../lib/components/AppHeader.svelte";
   import ShimmerDot from "../lib/components/ShimmerDot.svelte";
-  import "../lib/styles/tokens.css";
 
   const themeIcons = { system: "◐", light: "○", dark: "●" } as const;
 
@@ -37,7 +36,7 @@
   });
 </script>
 
-<div class="home">
+<div class="home stack">
   <AppHeader status={socket.status}>
     {#snippet actions()}
       <button type="button" onclick={() => theme.cycle()} title="Theme: {theme.current}">
@@ -47,8 +46,8 @@
     {/snippet}
   </AppHeader>
 
-  <div class="connection">
-    <div class="field">
+  <div class="connection stack">
+    <div class="field stack">
       <label for="url">url</label>
       <input
         id="url"
@@ -64,33 +63,33 @@
   </div>
 
   {#if socket.error}
-    <div class="error">
+    <div class="error row">
       <span class="error-icon">✗</span>
       <span class="error-text">{socket.error}</span>
     </div>
   {/if}
 
   {#if socket.status === "connected"}
-    <div class="threads-section">
-      <div class="section-header">
+    <div class="threads-section stack">
+      <div class="section-header split">
         <span class="section-title">Threads</span>
-        <div class="section-actions">
+        <div class="section-actions row">
           <a class="new-task-link" href="/task">New task</a>
           <button class="refresh-btn" onclick={() => threads.fetch()} title="Refresh">↻</button>
         </div>
       </div>
 
       {#if threads.loading}
-        <div class="loading">
+        <div class="loading row">
           <ShimmerDot /> Loading threads...
         </div>
       {:else if threads.list.length === 0}
-        <div class="empty">No threads yet. Create one above.</div>
+        <div class="empty row">No threads yet. Create one above.</div>
       {:else}
         <ul class="thread-list">
           {#each threads.list as thread (thread.id)}
-            <li class="thread-item">
-              <a class="thread-link" href="/thread/{thread.id}">
+            <li class="thread-item row">
+              <a class="thread-link row" href="/thread/{thread.id}">
                 <span class="thread-icon">›</span>
                 <span class="thread-preview">{thread.preview || "New thread"}</span>
                 <span class="thread-meta">{formatTime(thread.createdAt)}</span>
@@ -110,8 +109,7 @@
 
 <style>
   .home {
-    display: flex;
-    flex-direction: column;
+    --stack-gap: 0;
     min-height: 100vh;
     background: var(--cli-bg);
     color: var(--cli-text);
@@ -121,34 +119,28 @@
 
   /* Connection */
   .connection {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-sm);
+    --stack-gap: var(--space-sm);
     padding: var(--space-md);
     border-bottom: 1px solid var(--cli-border);
   }
 
   .field {
-    display: flex;
-    align-items: center;
-    gap: var(--space-sm);
+    --stack-gap: var(--space-xs);
   }
 
   .field label {
-    width: 50px;
     color: var(--cli-text-dim);
     font-size: var(--text-xs);
   }
 
   .field input {
-    flex: 1;
     padding: var(--space-sm);
     background: var(--cli-bg);
     border: 1px solid var(--cli-border);
     border-radius: var(--radius-sm);
     color: var(--cli-text);
     font-family: var(--font-mono);
-    font-size: var(--text-sm);
+    font-size: var(--text-base);
   }
 
   .field input:focus {
@@ -184,11 +176,9 @@
 
   /* Error */
   .error {
-    display: flex;
-    align-items: center;
-    gap: var(--space-sm);
+    --row-gap: var(--space-sm);
     padding: var(--space-sm) var(--space-md);
-    background: rgba(248, 113, 113, 0.1);
+    background: var(--cli-error-bg);
     border-bottom: 1px solid var(--cli-border);
     color: var(--cli-error);
   }
@@ -200,14 +190,11 @@
   /* Threads Section */
   .threads-section {
     flex: 1;
-    display: flex;
-    flex-direction: column;
+    --stack-gap: 0;
   }
 
   .section-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
+    --split-gap: var(--space-sm);
     padding: var(--space-sm) 0 var(--space-sm) var(--space-md);
     border-bottom: 1px solid var(--cli-border);
   }
@@ -220,9 +207,7 @@
   }
 
   .section-actions {
-    display: flex;
-    align-items: center;
-    gap: var(--space-sm);
+    --row-gap: var(--space-sm);
   }
 
   .new-task-link {
@@ -260,9 +245,7 @@
   /* Loading / Empty */
   .loading,
   .empty {
-    display: flex;
-    align-items: center;
-    gap: var(--space-sm);
+    --row-gap: var(--space-sm);
     padding: var(--space-lg) var(--space-md);
     color: var(--cli-text-muted);
   }
@@ -277,17 +260,14 @@
   }
 
   .thread-item {
-    display: flex;
-    align-items: center;
+    --row-gap: 0;
     border-bottom: 1px solid var(--cli-border);
   }
 
   .thread-link {
     flex: 1;
     min-width: 0;
-    display: flex;
-    align-items: center;
-    gap: var(--space-sm);
+    --row-gap: var(--space-sm);
     padding: var(--space-sm) var(--space-md);
     text-decoration: none;
     color: inherit;

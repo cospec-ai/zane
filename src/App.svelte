@@ -5,7 +5,17 @@
 </script>
 
 <AuthGate>
-  <div class="app">
+  <div class="app stack">
     <Router />
   </div>
 </AuthGate>
+
+<style>
+  .app {
+    --stack-gap: 0;
+    height: 100%;
+    width: 100%;
+    max-width: var(--app-max-width);
+    margin: 0 auto;
+  }
+</style>

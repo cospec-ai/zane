@@ -2,7 +2,6 @@
     import { socket } from "../lib/socket.svelte";
     import { threads } from "../lib/threads.svelte";
     import AppHeader from "../lib/components/AppHeader.svelte";
-    import "../lib/styles/tokens.css";
 
     const permissionPresets = {
         cautious: {
@@ -48,7 +47,7 @@
     }
 </script>
 
-<div class="task-page">
+<div class="task-page stack">
     <AppHeader status={socket.status}>
         {#snippet actions()}
             <a href="/">back</a>
@@ -60,13 +59,13 @@
             {#if socket.status !== "connected"}
                 <div class="state">Connect on the home screen before starting a task.</div>
             {:else}
-                <form class="task-form" onsubmit={handleStart}>
+                <form class="task-form stack" onsubmit={handleStart}>
                     <div class="form-title">New task</div>
-                    <div class="task-field">
+                    <div class="task-field stack">
                         <label for="task-dir">directory</label>
                         <input id="task-dir" type="text" bind:value={taskDir} placeholder="Working directory path..." />
                     </div>
-                    <div class="task-field">
+                    <div class="task-field stack">
                         <label for="task-summary">task</label>
                         <textarea
                             id="task-summary"
@@ -75,7 +74,7 @@
                             rows="2"
                         ></textarea>
                     </div>
-                    <div class="task-field">
+                    <div class="task-field stack">
                         <label for="task-instructions">instructions</label>
                         <textarea
                             id="task-instructions"
@@ -84,7 +83,7 @@
                             rows="3"
                         ></textarea>
                     </div>
-                    <div class="task-field">
+                    <div class="task-field stack">
                         <label for="task-permissions">permissions</label>
                         <select id="task-permissions" bind:value={permissionLevel}>
                             {#each Object.entries(permissionPresets) as [key, preset]}
@@ -103,8 +102,7 @@
 
 <style>
     .task-page {
-        display: flex;
-        flex-direction: column;
+        --stack-gap: 0;
         min-height: 100vh;
         background: var(--cli-bg);
         color: var(--cli-text);
@@ -130,9 +128,7 @@
     }
 
     .task-form {
-        display: flex;
-        flex-direction: column;
-        gap: var(--space-sm);
+        --stack-gap: var(--space-sm);
     }
 
     .form-title {
@@ -143,9 +139,7 @@
     }
 
     .task-field {
-        display: flex;
-        flex-direction: column;
-        gap: var(--space-xs);
+        --stack-gap: var(--space-xs);
     }
 
     .task-field label {
@@ -162,7 +156,7 @@
         border-radius: var(--radius-sm);
         color: var(--cli-text);
         font-family: var(--font-mono);
-        font-size: var(--text-sm);
+        font-size: var(--text-base);
         resize: vertical;
     }
 

@@ -13,7 +13,6 @@
     import WorkingStatus from "../lib/components/WorkingStatus.svelte";
     import Reasoning from "../lib/components/Reasoning.svelte";
     import PromptInput from "../lib/components/PromptInput.svelte";
-    import "../lib/styles/tokens.css";
 
     const themeIcons = { system: "◐", light: "○", dark: "●" } as const;
 
@@ -98,7 +97,7 @@
     });
 </script>
 
-<div class="thread-page">
+<div class="thread-page stack">
     <AppHeader
         status={socket.status}
         threadId={threadId}
@@ -116,7 +115,7 @@
 
     <div class="transcript" bind:this={container}>
         {#if messages.current.length === 0}
-            <div class="empty">
+            <div class="empty row">
                 <span class="empty-prompt">&gt;</span>
                 <span class="empty-text">No messages yet. Start a conversation.</span>
             </div>
@@ -152,8 +151,8 @@
         {/if}
 
         {#if sendError || (socket.status !== "connected" && socket.status !== "connecting" && socket.error)}
-            <div class="connection-error">
-                <span class="error-icon">!</span>
+            <div class="connection-error row">
+                <span class="error-icon row">!</span>
                 <span class="error-text">{sendError || socket.error}</span>
                 {#if socket.status === "reconnecting"}
                     <span class="error-hint">Reconnecting automatically...</span>
@@ -180,8 +179,7 @@
 
 <style>
     .thread-page {
-        display: flex;
-        flex-direction: column;
+        --stack-gap: 0;
         height: 100%;
         background: var(--cli-bg);
     }
@@ -195,9 +193,7 @@
     }
 
     .empty {
-        display: flex;
-        align-items: center;
-        gap: var(--space-sm);
+        --row-gap: var(--space-sm);
         padding: var(--space-xl) var(--space-md);
         font-family: var(--font-mono);
         font-size: var(--text-sm);
@@ -212,12 +208,10 @@
     }
 
     .connection-error {
-        display: flex;
-        align-items: center;
-        gap: var(--space-sm);
+        --row-gap: var(--space-sm);
         margin: var(--space-sm) var(--space-md);
         padding: var(--space-sm) var(--space-md);
-        background: rgba(220, 38, 38, 0.1);
+        background: var(--cli-error-bg);
         border: 1px solid var(--cli-error);
         border-radius: var(--radius-md);
         font-family: var(--font-mono);
@@ -225,8 +219,6 @@
     }
 
     .error-icon {
-        display: flex;
-        align-items: center;
         justify-content: center;
         width: 1.25rem;
         height: 1.25rem;
@@ -236,6 +228,7 @@
         font-size: var(--text-xs);
         font-weight: bold;
         flex-shrink: 0;
+        --row-gap: 0;
     }
 
     .error-text {

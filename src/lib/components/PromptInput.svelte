@@ -73,7 +73,7 @@
 <svelte:window onclick={handleClickOutside} />
 
 <form class="prompt-input" onsubmit={handleSubmit}>
-  <div class="input-container">
+  <div class="input-container stack">
     <textarea
       bind:value={input}
       onkeydown={handleKeydown}
@@ -82,13 +82,13 @@
       {disabled}
     ></textarea>
 
-    <div class="footer">
-      <div class="tools">
+    <div class="footer split">
+      <div class="tools row">
         <!-- Model Selector -->
         <div class="dropdown" class:open={modelOpen}>
           <button
             type="button"
-            class="tool-btn"
+            class="tool-btn row"
             onclick={(e) => {
               e.stopPropagation();
               modelOpen = !modelOpen;
@@ -114,7 +114,7 @@
                 {#each modelOptions as option}
                   <button
                     type="button"
-                    class="dropdown-item"
+                    class="dropdown-item split"
                     class:selected={model === option.value}
                     onclick={() => {
                       onModelChange(option.value);
@@ -138,7 +138,7 @@
         <div class="dropdown" class:open={reasoningOpen}>
           <button
             type="button"
-            class="tool-btn"
+            class="tool-btn row"
             onclick={(e) => {
               e.stopPropagation();
               reasoningOpen = !reasoningOpen;
@@ -166,7 +166,7 @@
               {#each reasoningOptions as option}
                 <button
                   type="button"
-                  class="dropdown-item"
+                  class="dropdown-item split"
                   class:selected={reasoningEffort === option.value}
                   onclick={() => {
                     onReasoningChange(option.value);
@@ -186,7 +186,7 @@
         </div>
       </div>
 
-      <button type="submit" class="submit-btn" disabled={!canSubmit}>
+      <button type="submit" class="submit-btn row" disabled={!canSubmit}>
         {#if disabled}
           <svg class="spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
@@ -208,8 +208,7 @@
   }
 
   .input-container {
-    display: flex;
-    flex-direction: column;
+    --stack-gap: 0;
     border: 1px solid var(--cli-border);
     border-radius: var(--radius-md);
     background: var(--cli-bg);
@@ -218,14 +217,14 @@
 
   .input-container:focus-within {
     border-color: var(--cli-text-muted);
-    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.05);
+    box-shadow: var(--shadow-focus);
   }
 
   textarea {
     flex: 1;
     padding: var(--space-md);
     font-family: var(--font-mono);
-    font-size: var(--text-sm);
+    font-size: var(--text-base);
     line-height: 1.6;
     color: var(--cli-text);
     background: transparent;
@@ -250,24 +249,18 @@
   }
 
   .footer {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
+    --split-gap: var(--space-sm);
     padding: var(--space-sm) var(--space-md);
     border-top: 1px solid var(--cli-border);
   }
 
   .tools {
-    display: flex;
-    align-items: center;
-    gap: var(--space-xs);
+    --row-gap: var(--space-xs);
   }
 
   /* Tool buttons */
   .tool-btn {
-    display: flex;
-    align-items: center;
-    gap: var(--space-xs);
+    --row-gap: var(--space-xs);
     padding: var(--space-xs) var(--space-sm);
     background: transparent;
     border: none;
@@ -311,7 +304,7 @@
     background: var(--cli-bg-elevated);
     border: 1px solid var(--cli-border);
     border-radius: var(--radius-md);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    box-shadow: var(--shadow-popover);
     z-index: 100;
     animation: fadeIn 0.1s ease;
   }
@@ -328,9 +321,7 @@
   }
 
   .dropdown-item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
+    --split-gap: var(--space-sm);
     width: 100%;
     padding: var(--space-sm) var(--space-sm);
     background: transparent;
@@ -368,8 +359,6 @@
 
   /* Submit button */
   .submit-btn {
-    display: flex;
-    align-items: center;
     justify-content: center;
     width: 2rem;
     height: 2rem;
@@ -379,6 +368,7 @@
     border-radius: var(--radius-sm);
     cursor: pointer;
     transition: opacity var(--transition-fast);
+    --row-gap: 0;
   }
 
   .submit-btn svg {
