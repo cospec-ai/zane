@@ -1,4 +1,4 @@
-import type { Message, RpcMessage, ApprovalRequest, UserInputRequest, UserInputQuestion, TurnStatus, PlanStep } from "./types";
+import type { Message, RpcMessage, ApprovalRequest, UserInputRequest, UserInputQuestion, TurnStatus, PlanStep, CollaborationMode } from "./types";
 import { socket } from "./socket.svelte";
 import { threads } from "./threads.svelte";
 
@@ -19,6 +19,7 @@ class MessagesStore {
   #streamingText = $state<Map<string, string>>(new Map());
   #loadedThreads = new Set<string>();
   #pendingApprovals = $state<Map<string, ApprovalRequest>>(new Map());
+  #pendingLiveMessages = new Map<string, Message>(); // survives clearThread for replay preservation
   #reasoningByThread = new Map<string, ReasoningState>();
   #execCommands = new Map<string, string>();
   #turnCompleteCallbacks = new Map<string, TurnCompleteCallback>();
@@ -113,7 +114,7 @@ class MessagesStore {
     return null;
   }
 
-  approve(approvalId: string, forSession = false) {
+  approve(approvalId: string, forSession = false, collaborationMode?: CollaborationMode) {
     const approval = this.#pendingApprovals.get(approvalId);
     if (!approval || approval.status !== "pending") return;
 
@@ -125,11 +126,11 @@ class MessagesStore {
     const decision = forSession ? "acceptForSession" : "accept";
     socket.send({
       id: approval.rpcId,
-      result: { decision },
+      result: { decision, ...(collaborationMode ? { collaborationMode } : {}) },
     });
   }
 
-  decline(approvalId: string) {
+  decline(approvalId: string, collaborationMode?: CollaborationMode) {
     const approval = this.#pendingApprovals.get(approvalId);
     if (!approval || approval.status !== "pending") return;
 
@@ -140,7 +141,7 @@ class MessagesStore {
     // Decline = deny but let agent continue
     socket.send({
       id: approval.rpcId,
-      result: { decision: "decline" },
+      result: { decision: "decline", ...(collaborationMode ? { collaborationMode } : {}) },
     });
   }
 
@@ -159,7 +160,9 @@ class MessagesStore {
     });
   }
 
-  respondToUserInput(messageId: string, answers: Record<string, string[]>) {
+  respondToUserInput(messageId: string, answers: Record<string, string[]>, collaborationMode?: CollaborationMode) {
+    this.#pendingLiveMessages.delete(messageId);
+
     const threadId = threads.currentId;
     if (!threadId) return;
 
@@ -176,7 +179,7 @@ class MessagesStore {
 
     socket.send({
       id: msg.userInputRequest.rpcId,
-      result: { answers: formattedAnswers },
+      result: { answers: formattedAnswers, ...(collaborationMode ? { collaborationMode } : {}) },
     });
 
     const updated = [...msgs];
@@ -201,6 +204,8 @@ class MessagesStore {
   }
 
   #updateApprovalInMessages(approvalId: string, status: "approved" | "declined" | "cancelled") {
+    this.#pendingLiveMessages.delete(`approval-${approvalId}`);
+
     const threadId = threads.currentId;
     if (!threadId) return;
 
@@ -565,6 +570,11 @@ class MessagesStore {
         this.#interruptPending = false;
         this.#statusDetail = null;
 
+        // Clear pending live messages for this thread — turn is done
+        for (const [id, msg] of this.#pendingLiveMessages) {
+          if (msg.threadId === threadId) this.#pendingLiveMessages.delete(id);
+        }
+
         // Fire turn complete callback if registered
         const callback = this.#turnCompleteCallbacks.get(threadId);
         if (callback) {
@@ -599,20 +609,28 @@ class MessagesStore {
       const itemId = (params.itemId as string) || (params.item_id as string) || `user-input-${Date.now()}`;
       const questions = (params.questions as UserInputQuestion[]) || [];
 
+      // A pending request means a turn is actively waiting
+      this.#currentTurnStatus = "InProgress";
+
       const userInputRequest: UserInputRequest = {
         rpcId,
         questions,
         status: "pending",
       };
 
-      this.#add(threadId, {
+      const inputMsg: Message = {
         id: `user-input-${itemId}`,
         role: "assistant",
         kind: "user-input-request",
         text: questions.map((q) => q.question).join("\n"),
         threadId,
         userInputRequest,
-      });
+      };
+      this.#pendingLiveMessages.set(inputMsg.id, inputMsg);
+      const existing = this.#byThread.get(threadId);
+      if (!existing?.some((m) => m.id === inputMsg.id)) {
+        this.#add(threadId, inputMsg);
+      }
       return;
     }
 
@@ -621,6 +639,9 @@ class MessagesStore {
       const itemId = (params.itemId as string) || `approval-${Date.now()}`;
       const reason = (params.reason as string) || null;
       const rpcId = msg.id as number; // Capture the request ID for response
+
+      // A pending approval means a turn is actively waiting
+      this.#currentTurnStatus = "InProgress";
 
       // Determine type from method name
       let approvalType: ApprovalRequest["type"] = "other";
@@ -650,14 +671,19 @@ class MessagesStore {
       this.#pendingApprovals.set(itemId, approval);
       this.#pendingApprovals = new Map(this.#pendingApprovals);
 
-      this.#add(threadId, {
+      const approvalMsg: Message = {
         id: `approval-${itemId}`,
         role: "approval",
         kind: "approval-request",
         text: description,
         threadId,
         approval,
-      });
+      };
+      this.#pendingLiveMessages.set(approvalMsg.id, approvalMsg);
+      const existing = this.#byThread.get(threadId);
+      if (!existing?.some((m) => m.id === approvalMsg.id)) {
+        this.#add(threadId, approvalMsg);
+      }
       return;
     }
 
@@ -921,6 +947,17 @@ class MessagesStore {
       );
       if (hasFollowUp) {
         messages[i] = { ...messages[i], planStatus: "approved" };
+      }
+    }
+
+    // Preserve any pending approval or user-input messages that arrived
+    // before the thread history loaded (e.g. replayed from orbit).
+    // We read from #pendingLiveMessages (a plain Map, not a Svelte proxy)
+    // to avoid timing issues with the reactive #byThread proxy.
+    for (const [id, msg] of this.#pendingLiveMessages) {
+      if (msg.threadId !== threadId) continue;
+      if (!messages.some((m) => m.id === id)) {
+        messages.push(msg);
       }
     }
 

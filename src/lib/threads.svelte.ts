@@ -10,6 +10,7 @@ const DEFAULT_SETTINGS: ThreadSettings = {
   model: "",
   reasoningEffort: "medium",
   sandbox: "workspace-write",
+  mode: "code",
 };
 
 class ThreadsStore {
@@ -42,7 +43,8 @@ class ThreadsStore {
     if (
       current.model === next.model &&
       current.reasoningEffort === next.reasoningEffort &&
-      current.sandbox === next.sandbox
+      current.sandbox === next.sandbox &&
+      current.mode === next.mode
     ) {
       return;
     }

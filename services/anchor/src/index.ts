@@ -25,6 +25,17 @@ let orbitHeartbeatTimeout: ReturnType<typeof setTimeout> | null = null;
 let warnedNoAppServer = false;
 let appServerInitialized = false;
 
+// Buffer pending approval requests from app-server so we can re-send them
+// when a client (re)subscribes to a thread via orbit.
+const APPROVAL_METHODS = new Set([
+  "item/fileChange/requestApproval",
+  "item/commandExecution/requestApproval",
+  "item/mcpToolCall/requestApproval",
+  "item/tool/requestUserInput",
+]);
+const pendingApprovals = new Map<string, string>(); // threadId → raw JSON line
+const approvalRpcIds = new Map<number | string, string>(); // rpcId → threadId (for cleanup on response)
+
 function ensureAppServer(): void {
   if (appServer || appServerStarting) return;
   appServerStarting = true;
@@ -44,6 +55,8 @@ function ensureAppServer(): void {
       console.warn(`[anchor] app-server exited with code ${code}`);
       appServer = null;
       appServerInitialized = false;
+      pendingApprovals.clear();
+      approvalRpcIds.clear();
     });
 
     streamLines(appServer.stdout, (line) => {
@@ -53,6 +66,16 @@ function ensureAppServer(): void {
         const threadId = extractThreadId(parsed);
         if (threadId) {
           subscribeToThread(threadId);
+        }
+
+        // Buffer pending approval requests; clear on turn/completed or response
+        const method = parsed.method as string | undefined;
+        if (method && APPROVAL_METHODS.has(method) && threadId) {
+          pendingApprovals.set(threadId, line);
+          const rpcId = parsed.id as number | string | undefined;
+          if (rpcId != null) approvalRpcIds.set(rpcId, threadId);
+        } else if (method === "turn/completed" && threadId) {
+          pendingApprovals.delete(threadId);
         }
       }
 
@@ -329,10 +352,25 @@ async function connectOrbit(): Promise<void> {
       return;
     }
 
-    // Filter out orbit protocol messages
+    // Handle orbit protocol messages
     try {
       const parsed = JSON.parse(text) as JsonObject;
       if (typeof parsed.type === "string" && (parsed.type as string).startsWith("orbit.")) {
+        // Client (re)subscribed — re-send any pending approval for this thread
+        if (parsed.type === "orbit.client-subscribed" && typeof parsed.threadId === "string") {
+          const buffered = pendingApprovals.get(parsed.threadId);
+          if (buffered && orbitSocket && orbitSocket.readyState === WebSocket.OPEN) {
+            // Tag as replay so orbit relays but doesn't double-store
+            try {
+              const bufferedMsg = JSON.parse(buffered);
+              bufferedMsg._replay = true;
+              orbitSocket.send(JSON.stringify(bufferedMsg));
+            } catch {
+              orbitSocket.send(buffered);
+            }
+            console.log(`[anchor] re-sent pending approval for thread ${parsed.threadId}`);
+          }
+        }
         return;
       }
     } catch {
@@ -347,6 +385,15 @@ async function connectOrbit(): Promise<void> {
       if (threadId) {
         subscribeToThread(threadId);
       }
+
+      // Clear pending approval when the client's response arrives
+      const rpcId = message.id as number | string | undefined;
+      if (rpcId != null && "result" in message && approvalRpcIds.has(rpcId)) {
+        const approvalThread = approvalRpcIds.get(rpcId)!;
+        pendingApprovals.delete(approvalThread);
+        approvalRpcIds.delete(rpcId);
+      }
+
       sendToAppServer(text.trim() + "\n");
     }
   });
@@ -543,9 +590,23 @@ const server = Bun.serve({
       }));
     },
     message(_ws, message) {
+      const text = typeof message === "string" ? message : new TextDecoder().decode(message);
+
+      // Forward orbit protocol messages (push-subscribe, push-test, etc.) to orbit
+      try {
+        const obj = JSON.parse(text) as JsonObject;
+        if (typeof obj.type === "string" && (obj.type as string).startsWith("orbit.")) {
+          if (orbitSocket && orbitSocket.readyState === WebSocket.OPEN) {
+            orbitSocket.send(text);
+          }
+          return;
+        }
+      } catch {
+        // not JSON — fall through to app-server path
+      }
+
       ensureAppServer();
       if (!appServer) return;
-      const text = typeof message === "string" ? message : new TextDecoder().decode(message);
       const parsed = parseJsonRpcMessage(text);
       if (parsed && ("method" in parsed || "id" in parsed)) {
         sendToAppServer(text.trim() + "\n");
