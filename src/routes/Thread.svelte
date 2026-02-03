@@ -41,11 +41,14 @@
         model = settings.model;
         reasoningEffort = settings.reasoningEffort;
         sandbox = settings.sandbox;
+        if (!modeUserOverride) {
+            mode = settings.mode;
+        }
     });
 
     $effect(() => {
         if (!threadId) return;
-        threads.updateSettings(threadId, { model, reasoningEffort, sandbox });
+        threads.updateSettings(threadId, { model, reasoningEffort, sandbox, mode });
     });
 
     $effect(() => {
@@ -186,14 +189,25 @@
                 {#if message.role === "approval" && message.approval}
                     <ApprovalPrompt
                         approval={message.approval}
-                        onApprove={(forSession) => messages.approve(message.approval!.id, forSession)}
-                        onDecline={() => messages.decline(message.approval!.id)}
+                        onApprove={(forSession) => messages.approve(
+                            message.approval!.id,
+                            forSession,
+                            model.trim() ? threads.resolveCollaborationMode(mode, model.trim(), reasoningEffort) : undefined,
+                        )}
+                        onDecline={() => messages.decline(
+                            message.approval!.id,
+                            model.trim() ? threads.resolveCollaborationMode(mode, model.trim(), reasoningEffort) : undefined,
+                        )}
                         onCancel={() => messages.cancel(message.approval!.id)}
                     />
                 {:else if message.kind === "user-input-request" && message.userInputRequest}
                     <UserInputPrompt
                         request={message.userInputRequest}
-                        onSubmit={(answers) => messages.respondToUserInput(message.id, answers)}
+                        onSubmit={(answers) => messages.respondToUserInput(
+                            message.id,
+                            answers,
+                            model.trim() ? threads.resolveCollaborationMode(mode, model.trim(), reasoningEffort) : undefined,
+                        )}
                     />
                 {:else if message.kind === "plan"}
                     <PlanCard
