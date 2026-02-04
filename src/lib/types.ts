@@ -26,6 +26,7 @@ export interface ThreadSettings {
   model: string;
   reasoningEffort: ReasoningEffort;
   sandbox: SandboxMode;
+  mode: ModeKind;
 }
 
 export type MessageRole = "user" | "assistant" | "tool" | "approval";

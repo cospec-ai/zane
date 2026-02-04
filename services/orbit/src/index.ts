@@ -227,8 +227,14 @@ function extractMethod(message: Record<string, unknown>): string | null {
 const STORED_METHODS = new Set([
   "turn/start",
   "turn/started",
+  "turn/completed",
   "turn/diff/updated",
   "item/started",
+  "item/completed",
+  "item/fileChange/requestApproval",
+  "item/commandExecution/requestApproval",
+  "item/mcpToolCall/requestApproval",
+  "item/tool/requestUserInput",
 ]);
 
 async function fetchThreadEvents(req: Request, env: Env, origin: string | null, userId: string | null): Promise<Response> {
@@ -326,6 +332,9 @@ interface AnchorMeta {
 export class OrbitRelay {
   private env: Env;
   private userId: string | null = null;
+
+  // Track rpcIds from approval/user-input requests so we can store their responses
+  private pendingRequestRpcIds = new Map<string | number, { threadId: string; method: string }>();
 
   // Socket -> subscribed thread IDs
   private clientSockets = new Map<WebSocket, Set<string>>();
@@ -445,6 +454,18 @@ export class OrbitRelay {
         // ignore
       }
       console.log(`[orbit] ${role} subscribed to thread ${msg.threadId}`);
+
+      // Notify anchors so they can re-send any pending approval from memory
+      if (role === "client") {
+        const notification = JSON.stringify({ type: "orbit.client-subscribed", threadId: msg.threadId });
+        const anchors = this.threadToAnchors.get(msg.threadId);
+        if (anchors) {
+          for (const anchor of anchors) {
+            try { anchor.send(notification); } catch { /* ignore */ }
+          }
+        }
+      }
+
       return true;
     }
 
@@ -830,11 +851,40 @@ export class OrbitRelay {
     const message = parseJsonMessage(payloadStr);
     if (!message) return;
 
-    const threadId = extractThreadId(message);
-    if (!threadId) return;
+    // Skip storage for replayed messages (e.g. re-sent approvals from anchor)
+    if (message._replay) return;
 
     const method = extractMethod(message);
-    if (!method || !STORED_METHODS.has(method)) return;
+    let threadId = extractThreadId(message);
+    let storeMethod = method;
+
+    // Track rpcIds from approval/user-input requests for response matching
+    if (method && message.id != null && threadId) {
+      if (method.endsWith("/requestApproval") || method === "item/tool/requestUserInput") {
+        this.pendingRequestRpcIds.set(message.id as string | number, { threadId, method });
+      }
+    }
+
+    // Clean up tracked request rpcIds when a turn completes
+    if (method === "turn/completed" && threadId) {
+      for (const [rpcId, info] of this.pendingRequestRpcIds) {
+        if (info.threadId === threadId) this.pendingRequestRpcIds.delete(rpcId);
+      }
+    }
+
+    // Match client responses (no method, has id + result) to tracked requests
+    if (!method && message.id != null && message.result != null) {
+      const pending = this.pendingRequestRpcIds.get(message.id as string | number);
+      if (pending) {
+        this.pendingRequestRpcIds.delete(message.id as string | number);
+        threadId = pending.threadId;
+        storeMethod = pending.method + "/response";
+      }
+    }
+
+    if (!threadId) return;
+    if (!storeMethod || (!STORED_METHODS.has(storeMethod) && !storeMethod.endsWith("/response"))) return;
+
     const turnId = extractTurnId(message);
     const entry = {
       ts: new Date().toISOString(),
@@ -852,7 +902,7 @@ export class OrbitRelay {
           turnId,
           direction,
           direction === "client" ? "client" : "anchor",
-          method,
+          storeMethod,
           JSON.stringify(entry),
           Math.floor(Date.now() / 1000)
         )
