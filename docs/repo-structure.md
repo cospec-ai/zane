@@ -15,10 +15,7 @@
 │   ├── anchor/                       # Bun local bridge + app-server relay
 │   │   ├── src/
 │   │   └── package.json
-│   ├── auth/                         # Cloudflare Worker for passkey auth
-│   │   ├── src/
-│   │   └── wrangler.toml
-│   └── orbit/                        # Cloudflare Worker + Durable Object
+│   └── orbit/                        # Cloudflare Worker + Durable Object (relay + auth)
 │       ├── src/
 │       └── wrangler.toml
 ├── src/                              # Web client (Svelte)
@@ -39,7 +36,7 @@
 ## Notes
 - The top-level `src/` is the web client (Svelte + Vite).
 - The web client is static and deploys to Cloudflare Pages.
-- Auth and Orbit run on Cloudflare Workers with D1 for storage.
+- Orbit runs on Cloudflare Workers with D1 for storage (relay + auth endpoints).
 - Anchor is Bun-only and runs locally on macOS.
 - `bin/zane` is the CLI entry point for local usage.
 - `bin/self-host.sh` is the self-host deployment wizard invoked by `zane self-host`.

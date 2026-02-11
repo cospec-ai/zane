@@ -1,3 +1,4 @@
+import type { AuthEnv } from "./env";
 import type { StoredCredential, StoredUser } from "./types";
 import { base64UrlEncode } from "./utils";
 
@@ -46,7 +47,7 @@ function parseTransports(value: string | null): StoredCredential["transports"] {
   }
 }
 
-export async function getUserById(env: CloudflareEnv, userId: string): Promise<StoredUser | null> {
+export async function getUserById(env: AuthEnv, userId: string): Promise<StoredUser | null> {
   const row = await env.DB.prepare(
     "SELECT id, name, display_name FROM passkey_users WHERE id = ?"
   )
@@ -56,7 +57,7 @@ export async function getUserById(env: CloudflareEnv, userId: string): Promise<S
   return { id: row.id, name: row.name, displayName: row.display_name };
 }
 
-export async function getUserByName(env: CloudflareEnv, name: string): Promise<StoredUser | null> {
+export async function getUserByName(env: AuthEnv, name: string): Promise<StoredUser | null> {
   const row = await env.DB.prepare(
     "SELECT id, name, display_name FROM passkey_users WHERE name = ?"
   )
@@ -66,7 +67,7 @@ export async function getUserByName(env: CloudflareEnv, name: string): Promise<S
   return { id: row.id, name: row.name, displayName: row.display_name };
 }
 
-export async function createUser(env: CloudflareEnv, name: string, displayName: string): Promise<StoredUser> {
+export async function createUser(env: AuthEnv, name: string, displayName: string): Promise<StoredUser> {
   const user: StoredUser = {
     id: randomUserId(),
     name,
@@ -80,12 +81,12 @@ export async function createUser(env: CloudflareEnv, name: string, displayName: 
   return user;
 }
 
-export async function hasAnyUsers(env: CloudflareEnv): Promise<boolean> {
+export async function hasAnyUsers(env: AuthEnv): Promise<boolean> {
   const row = await env.DB.prepare("SELECT 1 FROM passkey_users LIMIT 1").first();
   return row !== null;
 }
 
-export async function listCredentials(env: CloudflareEnv, userId: string): Promise<StoredCredential[]> {
+export async function listCredentials(env: AuthEnv, userId: string): Promise<StoredCredential[]> {
   const result = await env.DB.prepare(
     "SELECT id, user_id, public_key, counter, transports, device_type, backed_up FROM passkey_credentials WHERE user_id = ? ORDER BY created_at ASC"
   )
@@ -103,7 +104,7 @@ export async function listCredentials(env: CloudflareEnv, userId: string): Promi
   }));
 }
 
-export async function getCredential(env: CloudflareEnv, id: string): Promise<StoredCredential | null> {
+export async function getCredential(env: AuthEnv, id: string): Promise<StoredCredential | null> {
   const row = await env.DB.prepare(
     "SELECT id, user_id, public_key, counter, transports, device_type, backed_up FROM passkey_credentials WHERE id = ?"
   )
@@ -122,7 +123,7 @@ export async function getCredential(env: CloudflareEnv, id: string): Promise<Sto
   };
 }
 
-export async function upsertCredential(env: CloudflareEnv, credential: StoredCredential): Promise<void> {
+export async function upsertCredential(env: AuthEnv, credential: StoredCredential): Promise<void> {
   await env.DB.prepare(
     "INSERT INTO passkey_credentials (id, user_id, public_key, counter, transports, device_type, backed_up, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET public_key = excluded.public_key, counter = excluded.counter, transports = excluded.transports, device_type = excluded.device_type, backed_up = excluded.backed_up, updated_at = excluded.updated_at"
   )
@@ -140,7 +141,7 @@ export async function upsertCredential(env: CloudflareEnv, credential: StoredCre
     .run();
 }
 
-export async function updateCounter(env: CloudflareEnv, id: string, counter: number): Promise<void> {
+export async function updateCounter(env: AuthEnv, id: string, counter: number): Promise<void> {
   await env.DB.prepare("UPDATE passkey_credentials SET counter = ?, updated_at = ? WHERE id = ?")
     .bind(counter, Date.now(), id)
     .run();
@@ -151,7 +152,7 @@ export async function updateCounter(env: CloudflareEnv, id: string, counter: num
  * of the raw refresh token (only the hash is persisted).
  */
 export async function createSessionRecord(
-  env: CloudflareEnv,
+  env: AuthEnv,
   sessionId: string,
   userId: string,
   expiresAt: number,
@@ -165,13 +166,13 @@ export async function createSessionRecord(
     .run();
 }
 
-export async function getSessionRecord(env: CloudflareEnv, sessionId: string): Promise<AuthSessionRow | null> {
+export async function getSessionRecord(env: AuthEnv, sessionId: string): Promise<AuthSessionRow | null> {
   return await env.DB.prepare("SELECT id, user_id, created_at, expires_at, revoked_at, refresh_token, refresh_expires_at FROM auth_sessions WHERE id = ?")
     .bind(sessionId)
     .first<AuthSessionRow>();
 }
 
-export async function revokeSession(env: CloudflareEnv, sessionId: string): Promise<void> {
+export async function revokeSession(env: AuthEnv, sessionId: string): Promise<void> {
   await env.DB.prepare("UPDATE auth_sessions SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL")
     .bind(Date.now(), sessionId)
     .run();
@@ -182,7 +183,7 @@ export async function revokeSession(env: CloudflareEnv, sessionId: string): Prom
  * the old row. The UPDATE ... WHERE ensures only one concurrent caller wins.
  */
 export async function consumeRefreshToken(
-  env: CloudflareEnv,
+  env: AuthEnv,
   refreshTokenHash: string,
   nowSec: number
 ): Promise<AuthSessionRow | null> {

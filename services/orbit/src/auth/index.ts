@@ -1,4 +1,4 @@
-import { DurableObject, WorkerEntrypoint } from "cloudflare:workers";
+import { DurableObject } from "cloudflare:workers";
 import type {
   AuthenticationResponseJSON,
   AuthenticatorTransport,
@@ -11,8 +11,9 @@ import {
   verifyRegistrationResponse,
 } from "@simplewebauthn/server";
 
+import type { AuthEnv } from "./env";
 import type { ChallengeRecord, DeviceCodeRecord, StoredCredential, StoredUser } from "./types";
-import { base64UrlDecode, base64UrlEncode, corsHeaders, getRpId, isAllowedOrigin } from "./utils";
+import { authCorsHeaders, base64UrlDecode, base64UrlEncode, getRpId, isAllowedOrigin } from "./utils";
 import { createSession, refreshSession, verifySession } from "./session";
 import {
   createUser,
@@ -54,7 +55,7 @@ interface LoginVerifyRequest {
   credential: AuthenticationResponseJSON;
 }
 
-export class PasskeyChallengeStore extends DurableObject<CloudflareEnv> {
+export class PasskeyChallengeStore extends DurableObject<AuthEnv> {
   async fetch(req: Request): Promise<Response> {
     const url = new URL(req.url);
 
@@ -144,7 +145,7 @@ export class PasskeyChallengeStore extends DurableObject<CloudflareEnv> {
   }
 }
 
-async function handleSession(req: Request, env: CloudflareEnv): Promise<Response> {
+async function handleSession(req: Request, env: AuthEnv): Promise<Response> {
   const session = await verifySession(req, env);
   const systemHasUsers = await hasAnyUsers(env);
 
@@ -167,17 +168,17 @@ async function handleSession(req: Request, env: CloudflareEnv): Promise<Response
       hasPasskey,
       systemHasUsers,
     },
-    { status: 200, headers: corsHeaders(req, env) }
+    { status: 200, headers: authCorsHeaders(req, env) }
   );
 }
 
-async function handleRegisterOptions(req: Request, env: CloudflareEnv): Promise<Response> {
+async function handleRegisterOptions(req: Request, env: AuthEnv): Promise<Response> {
   const session = await verifySession(req, env);
   const body = (await req.json()) as RegisterOptionsRequest;
 
   const origin = req.headers.get("origin");
   if (!isAllowedOrigin(origin, env)) {
-    return Response.json({ error: "Origin not allowed." }, { status: 403, headers: corsHeaders(req, env) });
+    return Response.json({ error: "Origin not allowed." }, { status: 403, headers: authCorsHeaders(req, env) });
   }
 
   let userId: string;
@@ -190,7 +191,7 @@ async function handleRegisterOptions(req: Request, env: CloudflareEnv): Promise<
     // Adding a passkey to an existing account
     const existing = await getUserById(env, session.sub);
     if (!existing) {
-      return Response.json({ error: "User not found." }, { status: 404, headers: corsHeaders(req, env) });
+      return Response.json({ error: "User not found." }, { status: 404, headers: authCorsHeaders(req, env) });
     }
     userId = existing.id;
     userName = existing.name;
@@ -202,12 +203,12 @@ async function handleRegisterOptions(req: Request, env: CloudflareEnv): Promise<
     const name = body.name?.trim();
     const displayName = body.displayName?.trim() || name;
     if (!name) {
-      return Response.json({ error: "Name is required." }, { status: 400, headers: corsHeaders(req, env) });
+      return Response.json({ error: "Name is required." }, { status: 400, headers: authCorsHeaders(req, env) });
     }
 
     const existingByName = await getUserByName(env, name);
     if (existingByName) {
-      return Response.json({ error: "Registration failed." }, { status: 400, headers: corsHeaders(req, env) });
+      return Response.json({ error: "Registration failed." }, { status: 400, headers: authCorsHeaders(req, env) });
     }
 
     userId = randomUserId();
@@ -239,33 +240,33 @@ async function handleRegisterOptions(req: Request, env: CloudflareEnv): Promise<
     pendingUser,
   });
   if (!stored) {
-    return Response.json({ error: "Failed to persist challenge." }, { status: 500, headers: corsHeaders(req, env) });
+    return Response.json({ error: "Failed to persist challenge." }, { status: 500, headers: authCorsHeaders(req, env) });
   }
 
-  return Response.json(options, { status: 200, headers: corsHeaders(req, env) });
+  return Response.json(options, { status: 200, headers: authCorsHeaders(req, env) });
 }
 
-async function handleRegisterVerify(req: Request, env: CloudflareEnv): Promise<Response> {
+async function handleRegisterVerify(req: Request, env: AuthEnv): Promise<Response> {
   const body = (await req.json()) as RegisterVerifyRequest;
   if (!body?.credential) {
-    return Response.json({ error: "Invalid payload." }, { status: 400, headers: corsHeaders(req, env) });
+    return Response.json({ error: "Invalid payload." }, { status: 400, headers: authCorsHeaders(req, env) });
   }
 
   const origin = req.headers.get("origin");
   if (!isAllowedOrigin(origin, env)) {
-    return Response.json({ error: "Origin not allowed." }, { status: 403, headers: corsHeaders(req, env) });
+    return Response.json({ error: "Origin not allowed." }, { status: 403, headers: authCorsHeaders(req, env) });
   }
 
   // Extract and consume the challenge before verification
   const clientDataB64 = body.credential.response.clientDataJSON;
   const clientData = JSON.parse(new TextDecoder().decode(base64UrlDecode(clientDataB64))) as { challenge?: string };
   if (!clientData.challenge) {
-    return Response.json({ error: "Missing challenge." }, { status: 400, headers: corsHeaders(req, env) });
+    return Response.json({ error: "Missing challenge." }, { status: 400, headers: authCorsHeaders(req, env) });
   }
 
   const challengeRecord = await consumeChallenge(env, clientData.challenge);
   if (!challengeRecord) {
-    return Response.json({ error: "Registration challenge expired." }, { status: 400, headers: corsHeaders(req, env) });
+    return Response.json({ error: "Registration challenge expired." }, { status: 400, headers: authCorsHeaders(req, env) });
   }
 
   const rpID = getRpId(origin!);
@@ -282,12 +283,12 @@ async function handleRegisterVerify(req: Request, env: CloudflareEnv): Promise<R
   } catch {
     return Response.json(
       { error: "Registration verification failed." },
-      { status: 400, headers: corsHeaders(req, env) }
+      { status: 400, headers: authCorsHeaders(req, env) }
     );
   }
 
   if (!verification.verified || !verification.registrationInfo) {
-    return Response.json({ error: "Registration not verified." }, { status: 400, headers: corsHeaders(req, env) });
+    return Response.json({ error: "Registration not verified." }, { status: 400, headers: authCorsHeaders(req, env) });
   }
 
   // Resolve the user: existing account (adding passkey) or new registration
@@ -295,18 +296,18 @@ async function handleRegisterVerify(req: Request, env: CloudflareEnv): Promise<R
   if (challengeRecord.userId) {
     const existing = await getUserById(env, challengeRecord.userId);
     if (!existing) {
-      return Response.json({ error: "User not found." }, { status: 404, headers: corsHeaders(req, env) });
+      return Response.json({ error: "User not found." }, { status: 404, headers: authCorsHeaders(req, env) });
     }
     user = existing;
   } else if (challengeRecord.pendingUser) {
     // Re-check uniqueness in case of a race between two concurrent registrations
     const existingByName = await getUserByName(env, challengeRecord.pendingUser.name);
     if (existingByName) {
-      return Response.json({ error: "Registration failed." }, { status: 400, headers: corsHeaders(req, env) });
+      return Response.json({ error: "Registration failed." }, { status: 400, headers: authCorsHeaders(req, env) });
     }
     user = await createUser(env, challengeRecord.pendingUser.name, challengeRecord.pendingUser.displayName);
   } else {
-    return Response.json({ error: "Invalid challenge record." }, { status: 400, headers: corsHeaders(req, env) });
+    return Response.json({ error: "Invalid challenge record." }, { status: 400, headers: authCorsHeaders(req, env) });
   }
 
   const info = verification.registrationInfo;
@@ -334,30 +335,30 @@ async function handleRegisterVerify(req: Request, env: CloudflareEnv): Promise<R
       refreshToken: session.refreshToken,
       user: { id: user.id, name: user.name },
     },
-    { status: 200, headers: corsHeaders(req, env) }
+    { status: 200, headers: authCorsHeaders(req, env) }
   );
 }
 
-async function handleLoginOptions(req: Request, env: CloudflareEnv): Promise<Response> {
+async function handleLoginOptions(req: Request, env: AuthEnv): Promise<Response> {
   const body = (await req.json()) as LoginOptionsRequest;
   const username = body.username?.trim();
   if (!username) {
-    return Response.json({ error: "Username is required." }, { status: 400, headers: corsHeaders(req, env) });
+    return Response.json({ error: "Username is required." }, { status: 400, headers: authCorsHeaders(req, env) });
   }
 
   const user = await getUserByName(env, username);
   if (!user) {
-    return Response.json({ error: "Invalid credentials." }, { status: 400, headers: corsHeaders(req, env) });
+    return Response.json({ error: "Invalid credentials." }, { status: 400, headers: authCorsHeaders(req, env) });
   }
 
   const credentials = await listCredentials(env, user.id);
   if (credentials.length === 0) {
-    return Response.json({ error: "Invalid credentials." }, { status: 400, headers: corsHeaders(req, env) });
+    return Response.json({ error: "Invalid credentials." }, { status: 400, headers: authCorsHeaders(req, env) });
   }
 
   const origin = req.headers.get("origin");
   if (!isAllowedOrigin(origin, env)) {
-    return Response.json({ error: "Origin not allowed." }, { status: 403, headers: corsHeaders(req, env) });
+    return Response.json({ error: "Origin not allowed." }, { status: 403, headers: authCorsHeaders(req, env) });
   }
 
   const rpID = getRpId(origin!);
@@ -376,45 +377,45 @@ async function handleLoginOptions(req: Request, env: CloudflareEnv): Promise<Res
 
   const stored = await setChallenge(env, options.challenge, { type: "authentication", userId: user.id });
   if (!stored) {
-    return Response.json({ error: "Failed to persist challenge." }, { status: 500, headers: corsHeaders(req, env) });
+    return Response.json({ error: "Failed to persist challenge." }, { status: 500, headers: authCorsHeaders(req, env) });
   }
 
-  return Response.json(options, { status: 200, headers: corsHeaders(req, env) });
+  return Response.json(options, { status: 200, headers: authCorsHeaders(req, env) });
 }
 
-async function handleLoginVerify(req: Request, env: CloudflareEnv): Promise<Response> {
+async function handleLoginVerify(req: Request, env: AuthEnv): Promise<Response> {
   const body = (await req.json()) as LoginVerifyRequest;
   if (!body?.credential) {
-    return Response.json({ error: "Invalid payload." }, { status: 400, headers: corsHeaders(req, env) });
+    return Response.json({ error: "Invalid payload." }, { status: 400, headers: authCorsHeaders(req, env) });
   }
 
   const origin = req.headers.get("origin");
   if (!isAllowedOrigin(origin, env)) {
-    return Response.json({ error: "Origin not allowed." }, { status: 403, headers: corsHeaders(req, env) });
+    return Response.json({ error: "Origin not allowed." }, { status: 403, headers: authCorsHeaders(req, env) });
   }
 
   const credential = await getCredential(env, body.credential.id);
   if (!credential) {
-    return Response.json({ error: "Unknown credential." }, { status: 400, headers: corsHeaders(req, env) });
+    return Response.json({ error: "Unknown credential." }, { status: 400, headers: authCorsHeaders(req, env) });
   }
 
   const user = await getUserById(env, credential.userId);
   if (!user) {
-    return Response.json({ error: "User not found." }, { status: 404, headers: corsHeaders(req, env) });
+    return Response.json({ error: "User not found." }, { status: 404, headers: authCorsHeaders(req, env) });
   }
 
   // Extract challenge from clientDataJSON to consume the stored record
   const clientDataB64 = body.credential.response.clientDataJSON;
   const clientData = JSON.parse(new TextDecoder().decode(base64UrlDecode(clientDataB64))) as { challenge?: string };
   if (!clientData.challenge) {
-    return Response.json({ error: "Missing challenge." }, { status: 400, headers: corsHeaders(req, env) });
+    return Response.json({ error: "Missing challenge." }, { status: 400, headers: authCorsHeaders(req, env) });
   }
 
   const challengeRecord = await consumeChallenge(env, clientData.challenge);
   if (!challengeRecord) {
     return Response.json(
       { error: "Authentication challenge expired." },
-      { status: 400, headers: corsHeaders(req, env) }
+      { status: 400, headers: authCorsHeaders(req, env) }
     );
   }
 
@@ -438,12 +439,12 @@ async function handleLoginVerify(req: Request, env: CloudflareEnv): Promise<Resp
   } catch {
     return Response.json(
       { error: "Authentication verification failed." },
-      { status: 400, headers: corsHeaders(req, env) }
+      { status: 400, headers: authCorsHeaders(req, env) }
     );
   }
 
   if (!verification.verified || !verification.authenticationInfo) {
-    return Response.json({ error: "Authentication not verified." }, { status: 400, headers: corsHeaders(req, env) });
+    return Response.json({ error: "Authentication not verified." }, { status: 400, headers: authCorsHeaders(req, env) });
   }
 
   await updateCounter(env, credential.id, verification.authenticationInfo.newCounter);
@@ -456,7 +457,7 @@ async function handleLoginVerify(req: Request, env: CloudflareEnv): Promise<Resp
       refreshToken: session.refreshToken,
       user: { id: user.id, name: user.name },
     },
-    { status: 200, headers: corsHeaders(req, env) }
+    { status: 200, headers: authCorsHeaders(req, env) }
   );
 }
 
@@ -478,12 +479,12 @@ function generateDeviceCode(): string {
   return base64UrlEncode(bytes);
 }
 
-function getDoStub(env: CloudflareEnv) {
+function getDoStub(env: AuthEnv) {
   const id = env.PASSKEY_CHALLENGE_DO.idFromName("default");
   return env.PASSKEY_CHALLENGE_DO.get(id);
 }
 
-async function handleDeviceCode(req: Request, env: CloudflareEnv): Promise<Response> {
+async function handleDeviceCode(req: Request, env: AuthEnv): Promise<Response> {
   const deviceCode = generateDeviceCode();
   const userCode = generateUserCode();
   const record: DeviceCodeRecord = {
@@ -499,7 +500,7 @@ async function handleDeviceCode(req: Request, env: CloudflareEnv): Promise<Respo
     body: JSON.stringify({ record }),
   });
   if (!res.ok) {
-    return Response.json({ error: "Failed to create device code." }, { status: 500, headers: corsHeaders(req, env) });
+    return Response.json({ error: "Failed to create device code." }, { status: 500, headers: authCorsHeaders(req, env) });
   }
 
   const origin = env.PASSKEY_ORIGIN ?? "";
@@ -511,14 +512,14 @@ async function handleDeviceCode(req: Request, env: CloudflareEnv): Promise<Respo
       expiresIn: Math.floor(DEVICE_CODE_TTL_MS / 1000),
       interval: DEVICE_CODE_POLL_INTERVAL,
     },
-    { status: 200, headers: corsHeaders(req, env) }
+    { status: 200, headers: authCorsHeaders(req, env) }
   );
 }
 
-async function handleDeviceToken(req: Request, env: CloudflareEnv): Promise<Response> {
+async function handleDeviceToken(req: Request, env: AuthEnv): Promise<Response> {
   const body = (await req.json()) as { deviceCode?: string };
   if (!body?.deviceCode) {
-    return Response.json({ error: "deviceCode is required." }, { status: 400, headers: corsHeaders(req, env) });
+    return Response.json({ error: "deviceCode is required." }, { status: 400, headers: authCorsHeaders(req, env) });
   }
 
   const stub = getDoStub(env);
@@ -531,17 +532,17 @@ async function handleDeviceToken(req: Request, env: CloudflareEnv): Promise<Resp
   const pollData = (await pollRes.json()) as { record: DeviceCodeRecord | null };
 
   if (!pollData.record) {
-    return Response.json({ status: "expired" }, { status: 200, headers: corsHeaders(req, env) });
+    return Response.json({ status: "expired" }, { status: 200, headers: authCorsHeaders(req, env) });
   }
 
   if (pollData.record.status === "pending") {
-    return Response.json({ status: "pending" }, { status: 200, headers: corsHeaders(req, env) });
+    return Response.json({ status: "pending" }, { status: 200, headers: authCorsHeaders(req, env) });
   }
 
   // Check secret exists before consuming (so record survives retries if misconfigured)
   const anchorSecret = env.ZANE_ANCHOR_JWT_SECRET?.trim();
   if (!anchorSecret) {
-    return Response.json({ error: "Anchor secret not configured on auth service." }, { status: 503, headers: corsHeaders(req, env) });
+    return Response.json({ error: "Anchor secret not configured on Orbit." }, { status: 503, headers: authCorsHeaders(req, env) });
   }
 
   const consumeRes = await stub.fetch("https://do/device/consume", {
@@ -551,7 +552,7 @@ async function handleDeviceToken(req: Request, env: CloudflareEnv): Promise<Resp
   const consumeData = (await consumeRes.json()) as { record: DeviceCodeRecord | null };
 
   if (!consumeData.record) {
-    return Response.json({ status: "expired" }, { status: 200, headers: corsHeaders(req, env) });
+    return Response.json({ status: "expired" }, { status: 200, headers: authCorsHeaders(req, env) });
   }
 
   return Response.json(
@@ -560,19 +561,19 @@ async function handleDeviceToken(req: Request, env: CloudflareEnv): Promise<Resp
       userId: consumeData.record.userId,
       anchorJwtSecret: anchorSecret,
     },
-    { status: 200, headers: corsHeaders(req, env) }
+    { status: 200, headers: authCorsHeaders(req, env) }
   );
 }
 
-async function handleDeviceAuthorise(req: Request, env: CloudflareEnv): Promise<Response> {
+async function handleDeviceAuthorise(req: Request, env: AuthEnv): Promise<Response> {
   const session = await verifySession(req, env);
   if (!session) {
-    return Response.json({ error: "Authentication required." }, { status: 401, headers: corsHeaders(req, env) });
+    return Response.json({ error: "Authentication required." }, { status: 401, headers: authCorsHeaders(req, env) });
   }
 
   const body = (await req.json()) as { userCode?: string };
   if (!body?.userCode) {
-    return Response.json({ error: "userCode is required." }, { status: 400, headers: corsHeaders(req, env) });
+    return Response.json({ error: "userCode is required." }, { status: 400, headers: authCorsHeaders(req, env) });
   }
 
   const stub = getDoStub(env);
@@ -585,96 +586,92 @@ async function handleDeviceAuthorise(req: Request, env: CloudflareEnv): Promise<
   if (!data.ok) {
     return Response.json(
       { error: data.error === "expired" ? "Code expired or not found." : "Authorisation failed." },
-      { status: 400, headers: corsHeaders(req, env) }
+      { status: 400, headers: authCorsHeaders(req, env) }
     );
   }
 
-  return Response.json({ ok: true }, { status: 200, headers: corsHeaders(req, env) });
+  return Response.json({ ok: true }, { status: 200, headers: authCorsHeaders(req, env) });
 }
 
-async function handleRefresh(req: Request, env: CloudflareEnv): Promise<Response> {
+async function handleRefresh(req: Request, env: AuthEnv): Promise<Response> {
   let body: { refreshToken?: string };
   try {
     body = (await req.json()) as { refreshToken?: string };
   } catch {
-    return Response.json({ error: "Invalid request body." }, { status: 400, headers: corsHeaders(req, env) });
+    return Response.json({ error: "Invalid request body." }, { status: 400, headers: authCorsHeaders(req, env) });
   }
   if (!body?.refreshToken) {
-    return Response.json({ error: "refreshToken is required." }, { status: 400, headers: corsHeaders(req, env) });
+    return Response.json({ error: "refreshToken is required." }, { status: 400, headers: authCorsHeaders(req, env) });
   }
 
   const result = await refreshSession(env, body.refreshToken);
   if (!result) {
-    return Response.json({ error: "Invalid or expired refresh token." }, { status: 401, headers: corsHeaders(req, env) });
+    return Response.json({ error: "Invalid or expired refresh token." }, { status: 401, headers: authCorsHeaders(req, env) });
   }
 
   return Response.json(
     { token: result.tokens.token, refreshToken: result.tokens.refreshToken, user: result.user },
-    { status: 200, headers: corsHeaders(req, env) }
+    { status: 200, headers: authCorsHeaders(req, env) }
   );
 }
 
-async function handleLogout(req: Request, env: CloudflareEnv): Promise<Response> {
+async function handleLogout(req: Request, env: AuthEnv): Promise<Response> {
   const session = await verifySession(req, env);
   if (session) {
     await revokeSession(env, session.jti);
   }
-  return new Response(null, { status: 204, headers: corsHeaders(req, env) });
+  return new Response(null, { status: 204, headers: authCorsHeaders(req, env) });
 }
 
-export default class AuthService extends WorkerEntrypoint<CloudflareEnv> {
-  async fetch(req: Request): Promise<Response> {
-    const env = this.env;
-    const url = new URL(req.url);
-
-    if (req.method === "OPTIONS") {
-      return new Response(null, { status: 204, headers: corsHeaders(req, env) });
-    }
-
-    if (req.method === "GET" && url.pathname === "/health") {
-      return new Response(null, { status: 200 });
-    }
-
-    if (url.pathname === "/auth/session" && req.method === "GET") {
-      return await handleSession(req, env);
-    }
-
-    if (url.pathname === "/auth/register/options" && req.method === "POST") {
-      return await handleRegisterOptions(req, env);
-    }
-
-    if (url.pathname === "/auth/register/verify" && req.method === "POST") {
-      return await handleRegisterVerify(req, env);
-    }
-
-    if (url.pathname === "/auth/login/options" && req.method === "POST") {
-      return await handleLoginOptions(req, env);
-    }
-
-    if (url.pathname === "/auth/login/verify" && req.method === "POST") {
-      return await handleLoginVerify(req, env);
-    }
-
-    if (url.pathname === "/auth/refresh" && req.method === "POST") {
-      return await handleRefresh(req, env);
-    }
-
-    if (url.pathname === "/auth/logout" && req.method === "POST") {
-      return await handleLogout(req, env);
-    }
-
-    if (url.pathname === "/auth/device/code" && req.method === "POST") {
-      return await handleDeviceCode(req, env);
-    }
-
-    if (url.pathname === "/auth/device/token" && req.method === "POST") {
-      return await handleDeviceToken(req, env);
-    }
-
-    if (url.pathname === "/auth/device/authorise" && req.method === "POST") {
-      return await handleDeviceAuthorise(req, env);
-    }
-
-    return new Response("Not found", { status: 404, headers: corsHeaders(req, env) });
+export async function handleAuthRequest(req: Request, env: AuthEnv): Promise<Response | null> {
+  const url = new URL(req.url);
+  if (!url.pathname.startsWith("/auth/")) {
+    return null;
   }
+
+  if (req.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: authCorsHeaders(req, env) });
+  }
+
+  if (url.pathname === "/auth/session" && req.method === "GET") {
+    return await handleSession(req, env);
+  }
+
+  if (url.pathname === "/auth/register/options" && req.method === "POST") {
+    return await handleRegisterOptions(req, env);
+  }
+
+  if (url.pathname === "/auth/register/verify" && req.method === "POST") {
+    return await handleRegisterVerify(req, env);
+  }
+
+  if (url.pathname === "/auth/login/options" && req.method === "POST") {
+    return await handleLoginOptions(req, env);
+  }
+
+  if (url.pathname === "/auth/login/verify" && req.method === "POST") {
+    return await handleLoginVerify(req, env);
+  }
+
+  if (url.pathname === "/auth/refresh" && req.method === "POST") {
+    return await handleRefresh(req, env);
+  }
+
+  if (url.pathname === "/auth/logout" && req.method === "POST") {
+    return await handleLogout(req, env);
+  }
+
+  if (url.pathname === "/auth/device/code" && req.method === "POST") {
+    return await handleDeviceCode(req, env);
+  }
+
+  if (url.pathname === "/auth/device/token" && req.method === "POST") {
+    return await handleDeviceToken(req, env);
+  }
+
+  if (url.pathname === "/auth/device/authorise" && req.method === "POST") {
+    return await handleDeviceAuthorise(req, env);
+  }
+
+  return new Response("Not found", { status: 404, headers: authCorsHeaders(req, env) });
 }

@@ -1,9 +1,10 @@
+import type { AuthEnv } from "./env";
 import type { ChallengeRecord } from "./types";
 
 export const CHALLENGE_TTL_MS = 5 * 60 * 1000;
 
 export async function setChallenge(
-  env: CloudflareEnv,
+  env: AuthEnv,
   challenge: string,
   opts: {
     type: "registration" | "authentication";
@@ -28,7 +29,7 @@ export async function setChallenge(
 }
 
 export async function consumeChallenge(
-  env: CloudflareEnv,
+  env: AuthEnv,
   challenge: string
 ): Promise<ChallengeRecord | null> {
   const id = env.PASSKEY_CHALLENGE_DO.idFromName("default");

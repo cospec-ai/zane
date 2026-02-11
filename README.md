@@ -40,7 +40,7 @@ Zane lets you monitor and control [Codex CLI](https://github.com/openai/codex) s
    Codex app-server
 ```
 
-**Anchor** is a lightweight daemon on your Mac that spawns `codex app-server` and relays structured JSON-RPC messages. **Orbit** is a Cloudflare Worker + Durable Object that relays WebSocket traffic between your devices and Anchor. The **web client** is a static Svelte app on Cloudflare Pages.
+**Anchor** is a lightweight daemon on your Mac that spawns `codex app-server` and relays structured JSON-RPC messages. **Orbit** is a Cloudflare Worker + Durable Object that handles passkey auth and relays WebSocket traffic between your devices and Anchor. The **web client** is a static Svelte app on Cloudflare Pages.
 
 ## Quick start
 
@@ -84,7 +84,7 @@ Zane can be fully self-hosted on your own Cloudflare account:
 zane self-host
 ```
 
-The wizard creates a D1 database, deploys Auth and Orbit workers, builds the web client to Cloudflare Pages, and configures your Anchor. See the [self-hosting guide](docs/self-hosting.md) for prerequisites and details.
+The wizard creates a D1 database, deploys Orbit (auth + relay), builds the web client to Cloudflare Pages, and configures your Anchor. See the [self-hosting guide](docs/self-hosting.md) for prerequisites and details.
 
 ## Documentation
 

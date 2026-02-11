@@ -1,3 +1,5 @@
+import type { AuthEnv } from "./env";
+
 export function base64UrlEncode(data: Uint8Array): string {
   let binary = "";
   for (const byte of data) {
@@ -17,7 +19,7 @@ export function base64UrlDecode(value: string): Uint8Array {
   return bytes;
 }
 
-export function isAllowedOrigin(origin: string | null, env: CloudflareEnv): boolean {
+export function isAllowedOrigin(origin: string | null, env: AuthEnv): boolean {
   if (!origin) return false;
   if (origin === env.PASSKEY_ORIGIN) return true;
   try {
@@ -28,7 +30,7 @@ export function isAllowedOrigin(origin: string | null, env: CloudflareEnv): bool
   }
 }
 
-export function corsHeaders(req: Request, env: CloudflareEnv): HeadersInit {
+export function authCorsHeaders(req: Request, env: AuthEnv): HeadersInit {
   const origin = req.headers.get("origin");
   const allowedOrigin = isAllowedOrigin(origin, env) ? origin! : "null";
   return {

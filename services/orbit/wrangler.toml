@@ -4,7 +4,8 @@ compatibility_date = "2025-01-01"
 compatibility_flags = ["nodejs_compat"]
 
 durable_objects.bindings = [
-  { name = "ORBIT_DO", class_name = "OrbitRelay" }
+  { name = "ORBIT_DO", class_name = "OrbitRelay" },
+  { name = "PASSKEY_CHALLENGE_DO", class_name = "PasskeyChallengeStore" }
 ]
 
 [observability]
@@ -18,3 +19,7 @@ database_id = "ca5a5a6b-6822-4246-8fc2-136ed5b1c6a0"
 [[migrations]]
 tag = "v1"
 new_classes = ["OrbitRelay"]
+
+[[migrations]]
+tag = "v2"
+new_classes = ["PasskeyChallengeStore"]

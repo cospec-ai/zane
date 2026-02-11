@@ -5,8 +5,7 @@ This app uses passkeys for user authentication and JWTs for service-to-service a
 ## Components
 
 - Web client (Svelte)
-- Auth service (Cloudflare Worker) for passkey registration/login
-- Orbit (Cloudflare Worker + Durable Object) for WS relay and event storage
+- Orbit (Cloudflare Worker + Durable Object) for passkey auth, WS relay, and event storage
 - Anchor (local Bun service) bridging Orbit to `codex app-server`
 
 ## JWTs and secrets
@@ -24,12 +23,12 @@ User JWTs are also stored server-side in `auth_sessions` for revocation and expi
 
 ### Passkey login
 
-1) Web client calls Auth service endpoints to register or sign in:
+1) Web client calls Orbit auth endpoints to register or sign in:
    - `POST /auth/register/options` + `POST /auth/register/verify`
    - `POST /auth/login/options` + `POST /auth/login/verify`
-2) Auth service returns a JWT and a refresh token, both signed with `ZANE_WEB_JWT_SECRET`.
+2) Orbit returns a JWT and a refresh token, both signed with `ZANE_WEB_JWT_SECRET`.
 3) Client stores both tokens in `localStorage`.
-4) Auth service stores the session id (`jti`) in D1.
+4) Orbit stores the session id (`jti`) in D1.
 5) When the JWT expires, the client calls `POST /auth/refresh` with the refresh token to get a new JWT and rotated refresh token.
 
 ### Device code login (Anchor CLI)
@@ -64,7 +63,7 @@ User JWTs are also stored server-side in `auth_sessions` for revocation and expi
 
 ## Required configuration
 
-Auth service:
+Orbit auth:
 - `PASSKEY_ORIGIN`
 - `ZANE_WEB_JWT_SECRET`
 
@@ -78,11 +77,11 @@ Anchor:
 - `ANCHOR_APP_CWD` (optional, defaults to `process.cwd()`)
 
 Client:
-- `VITE_AUTH_URL`
+- `AUTH_URL` (typically the same host as Orbit in self-host mode)
 
 ## Common issues
 
-- `Auth service unavailable` in the client: `PASSKEY_ORIGIN` does not match your web origin.
+- `Orbit unavailable` in the client: `PASSKEY_ORIGIN` does not match your web origin, or `AUTH_URL` is incorrect.
 - `401` from Orbit WS/events: mismatched or missing JWT secret.
 - `Not initialized` JSON-RPC errors: app-server did not receive `initialize` or rejected params.
 - Wrong project files: `ANCHOR_APP_CWD` set to the wrong path.

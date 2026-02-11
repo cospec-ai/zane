@@ -104,7 +104,7 @@ class AuthStore {
       const data = await parseResponse<AuthSessionResponse>(response);
 
       if (!response.ok || !data) {
-        this.error = "Auth service unavailable.";
+        this.error = "Orbit unavailable.";
         this.status = "signed_out";
         return;
       }
@@ -144,7 +144,7 @@ class AuthStore {
       this.#clearToken();
       this.status = data.systemHasUsers ? "signed_out" : "needs_setup";
     } catch {
-      this.error = "Auth service unavailable.";
+      this.error = "Orbit unavailable.";
       this.status = "signed_out";
     }
   }

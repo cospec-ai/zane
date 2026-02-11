@@ -23,6 +23,7 @@ jobs:
         run: bun run build
         env:
           AUTH_URL: ${{ secrets.AUTH_URL }}
+          VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
       - name: Deploy
         run: bunx wrangler pages deploy dist
         env:

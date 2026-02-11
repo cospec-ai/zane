@@ -7,6 +7,7 @@ export interface PushSubscription {
 }
 
 export interface PushPayload {
+  [key: string]: string;
   type: string;
   title: string;
   body: string;
@@ -90,7 +91,6 @@ export async function sendPush(sub: PushSubscription, payload: PushPayload, vapi
     body,
   });
 
-  // Drain the response body to avoid holding the connection open
   await response.text();
 
   return {

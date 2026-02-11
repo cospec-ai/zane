@@ -34,7 +34,7 @@
 
       success = true;
     } catch {
-      error = "Could not reach the auth service.";
+      error = "Could not reach Orbit.";
     } finally {
       busy = false;
     }

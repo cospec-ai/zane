@@ -1,6 +1,6 @@
 # Orbit
 
-Cloudflare Worker + Durable Object relay between Anchor and the web client.
+Cloudflare Worker + Durable Object service for auth + relay between Anchor and the web client.
 
 ## Run (local)
 
@@ -13,13 +13,15 @@ bun run dev
 ## Endpoints
 
 - `GET /health`
+- `GET /auth/session`
+- `POST /auth/*` (passkey + device code flows)
 - `GET /ws/client`
 - `GET /ws/anchor`
 - `GET /threads/:id/events` (NDJSON, requires D1)
 
 ## Auth
 
-Orbit expects a passkey session JWT from the auth service:
+Orbit expects a passkey session JWT from its auth endpoints:
 
 - `Authorization: Bearer <jwt>` header, or
 - `?token=<jwt>` query param (for browsers)

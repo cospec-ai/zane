@@ -12,6 +12,9 @@
     "wrangler": "^3.100.0"
   },
   "dependencies": {
-    "@pushforge/builder": "^1.1.0"
+    "@simplewebauthn/server": "^11.0.0",
+    "jose": "^6.1.0",
+    "@pushforge/builder": "^1.1.0",
+    "hono": "^4.9.7"
   }
 }

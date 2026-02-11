@@ -10,7 +10,7 @@
 
 ### Authentication
 - Users authenticate via WebAuthn passkeys.
-- Auth service issues short-lived JWTs (1 hour) signed with `ZANE_WEB_JWT_SECRET` (issuer `zane-auth`, audience `zane-web`).
+- Orbit auth endpoints issue short-lived JWTs (1 hour) signed with `ZANE_WEB_JWT_SECRET` (issuer `zane-auth`, audience `zane-web`).
 - Refresh tokens (7 days) are issued alongside access JWTs. Only the SHA-256 hash is stored server-side.
 - Refresh token rotation: each refresh atomically revokes the old session and mints a new one, preventing replay.
 - The client auto-refreshes the access JWT 60 seconds before expiry.
@@ -19,7 +19,7 @@
 
 ### Anchor Authentication
 - Anchor authenticates via a device code flow (`/auth/device/code` → `/auth/device/authorise` → `/auth/device/token`).
-- On successful device login, the auth service returns `ZANE_ANCHOR_JWT_SECRET` over HTTPS.
+- On successful device login, Orbit returns `ZANE_ANCHOR_JWT_SECRET` over HTTPS.
 - Anchor stores credentials in `~/.zane/credentials.json` with `0600` permissions.
 - Anchor mints short-lived JWTs (5 minutes) signed with `ZANE_ANCHOR_JWT_SECRET` (issuer `zane-anchor`, audience `zane-orbit-anchor`).
 - Orbit validates both web and anchor token types based on audience and issuer.
@@ -53,7 +53,7 @@
 - API responses: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`.
 
 ### CORS
-- Auth and Orbit validate origins against `PASSKEY_ORIGIN` / `ALLOWED_ORIGIN`.
+- Orbit auth and relay endpoints validate origins against `PASSKEY_ORIGIN` / `ALLOWED_ORIGIN`.
 - `localhost` and `127.0.0.1` are always allowed regardless of the configured origin.
 
 ## Known Limitations

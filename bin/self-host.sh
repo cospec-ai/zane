@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ── Zane Self-Host Wizard ───────────────────────
-# Deploys Auth, Orbit, and Web to your Cloudflare account.
+# Deploys Orbit (auth + relay) and Web to your Cloudflare account.
 # Sourced by `zane self-host` or the install script.
 
 set -euo pipefail
@@ -99,7 +99,6 @@ old_db_id="ca5a5a6b-6822-4246-8fc2-136ed5b1c6a0"
 
 for toml_path in \
   "$ZANE_HOME/wrangler.toml" \
-  "$ZANE_HOME/services/auth/wrangler.toml" \
   "$ZANE_HOME/services/orbit/wrangler.toml"; do
 
   if [[ -f "$toml_path" ]]; then
@@ -123,29 +122,8 @@ step "5. Running database migrations"
 (cd "$ZANE_HOME" && bunx wrangler d1 migrations apply zane --remote)
 pass "Migrations applied"
 
-# ── Deploy auth worker ──────────────────────────
-step "6. Deploying auth worker"
-
-(cd "$ZANE_HOME/services/auth" && bun install --silent)
-
-echo "$web_jwt_secret" | wrangler secret put ZANE_WEB_JWT_SECRET --name zane 2>/dev/null || true
-echo "$anchor_jwt_secret" | wrangler secret put ZANE_ANCHOR_JWT_SECRET --name zane 2>/dev/null || true
-
-auth_output=$(cd "$ZANE_HOME/services/auth" && bunx wrangler deploy 2>&1)
-echo "$auth_output"
-
-# Try to extract the worker URL
-auth_url=$(echo "$auth_output" | grep -oE 'https://[^ ]+\.workers\.dev' | head -1 || true)
-if [[ -z "$auth_url" ]]; then
-  echo ""
-  printf "  Enter your auth worker URL (e.g. https://zane.your-subdomain.workers.dev): "
-  read -r auth_url
-fi
-
-pass "Auth worker deployed: $auth_url"
-
 # ── Deploy orbit worker ─────────────────────────
-step "7. Deploying orbit worker"
+step "6. Deploying orbit worker"
 
 (cd "$ZANE_HOME/services/orbit" && bun install --silent)
 
@@ -168,12 +146,12 @@ pass "Orbit worker deployed: $orbit_url"
 orbit_ws_url=$(echo "$orbit_url" | sed 's|^https://|wss://|')/ws/anchor
 
 # ── Build and deploy web ────────────────────────
-step "8. Building and deploying web frontend"
+step "7. Building and deploying web frontend"
 
 (cd "$ZANE_HOME" && bun install --silent)
 
-echo "  Building with AUTH_URL=$auth_url ..."
-(cd "$ZANE_HOME" && AUTH_URL="$auth_url" bun run build)
+echo "  Building with AUTH_URL=$orbit_url ..."
+(cd "$ZANE_HOME" && AUTH_URL="$orbit_url" bun run build)
 
 pages_output=$(cd "$ZANE_HOME" && bunx wrangler pages deploy dist --project-name zane 2>&1)
 echo "$pages_output"
@@ -188,19 +166,19 @@ fi
 pass "Web deployed: $pages_url"
 
 # ── Set PASSKEY_ORIGIN ──────────────────────────
-step "9. Setting PASSKEY_ORIGIN"
+step "8. Setting PASSKEY_ORIGIN"
 
-echo "$pages_url" | wrangler secret put PASSKEY_ORIGIN --name zane 2>/dev/null || true
+echo "$pages_url" | wrangler secret put PASSKEY_ORIGIN --name orbit 2>/dev/null || true
 pass "PASSKEY_ORIGIN set to $pages_url"
 
 # ── Generate .env for anchor ────────────────────
-step "10. Configuring anchor"
+step "9. Configuring anchor"
 
 cat > "$ENV_FILE" <<ENVEOF
 # Zane Anchor Configuration (self-host)
 ANCHOR_PORT=8788
 ANCHOR_ORBIT_URL=${orbit_ws_url}
-AUTH_URL=${auth_url}
+AUTH_URL=${orbit_url}
 ANCHOR_JWT_TTL_SEC=300
 ANCHOR_APP_CWD=
 ENVEOF
@@ -212,7 +190,6 @@ echo ""
 printf "${GREEN}${BOLD}Self-host deployment complete!${RESET}\n"
 echo ""
 printf "  ${BOLD}Web:${RESET}    %s\n" "$pages_url"
-printf "  ${BOLD}Auth:${RESET}   %s\n" "$auth_url"
 printf "  ${BOLD}Orbit:${RESET}  %s\n" "$orbit_url"
 echo ""
 echo "  Next steps:"

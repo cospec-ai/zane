@@ -12,17 +12,16 @@ The wizard will install [Wrangler](https://developers.cloudflare.com/workers/wra
 
 ## What gets deployed
 
-The wizard deploys three services to your Cloudflare account:
+The wizard deploys two services to your Cloudflare account:
 
 | Service | Platform | Purpose |
 |---------|----------|---------|
-| **Auth** | Cloudflare Worker | Passkey registration/login, JWT issuance |
-| **Orbit** | Cloudflare Worker + Durable Object | WebSocket relay between devices and Anchor |
+| **Orbit** | Cloudflare Worker + Durable Object | Passkey auth, JWT issuance, WebSocket relay between devices and Anchor |
 | **Web** | Cloudflare Pages | Static Svelte frontend |
 
 It also creates a shared **D1 database** (SQLite) for auth sessions, passkey credentials, and event storage.
 
-All three services share two generated JWT secrets (`ZANE_WEB_JWT_SECRET` and `ZANE_ANCHOR_JWT_SECRET`) that are set as Cloudflare secrets automatically.
+Orbit uses two generated JWT secrets (`ZANE_WEB_JWT_SECRET` and `ZANE_ANCHOR_JWT_SECRET`) that are set as Cloudflare secrets automatically.
 
 ## Running the wizard
 
@@ -30,18 +29,17 @@ All three services share two generated JWT secrets (`ZANE_WEB_JWT_SECRET` and `Z
 zane self-host
 ```
 
-The wizard walks through 10 steps:
+The wizard walks through 9 steps:
 
 1. Checks for Wrangler and Cloudflare login
 2. Creates a D1 database
 3. Updates `wrangler.toml` files with the database ID
 4. Generates JWT secrets
 5. Runs database migrations
-6. Deploys the Auth worker and sets secrets
-7. Deploys the Orbit worker and sets secrets
-8. Builds and deploys the web frontend to Pages
-9. Sets the `PASSKEY_ORIGIN` secret (your Pages URL)
-10. Writes the Anchor `.env` with your Orbit and Auth URLs
+6. Deploys the Orbit worker and sets secrets
+7. Builds and deploys the web frontend to Pages
+8. Sets the `PASSKEY_ORIGIN` secret (your Pages URL)
+9. Writes the Anchor `.env` with your Orbit URL for both WebSocket and auth
 
 At the end, it prints your deployment URLs and next steps.
 
@@ -55,7 +53,6 @@ At the end, it prints your deployment URLs and next steps.
 After running `zane update` to pull the latest code, redeploy the services:
 
 ```bash
-cd ~/.zane/services/auth && bunx wrangler deploy
 cd ~/.zane/services/orbit && bunx wrangler deploy
 cd ~/.zane && bun run build && bunx wrangler pages deploy dist --project-name zane
 ```

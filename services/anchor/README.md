@@ -23,7 +23,7 @@ Env is loaded from the repo root `.env` via the run scripts.
 |----------|---------|-------------|
 | `ANCHOR_PORT` | `8788` | Local WebSocket server port |
 | `ANCHOR_ORBIT_URL` | _(empty)_ | Orbit relay URL (e.g. `wss://orbit.<domain>.workers.dev/ws/anchor`) |
-| `AUTH_URL` | _(empty)_ | Auth service URL for device code login |
+| `AUTH_URL` | _(empty)_ | Auth endpoint base URL (served by Orbit) for device code login |
 | `ZANE_ANCHOR_JWT_SECRET` | _(empty)_ | Shared secret for Orbit service-to-service auth |
 | `ANCHOR_JWT_TTL_SEC` | `300` | JWT token lifetime in seconds |
 | `ANCHOR_APP_CWD` | `process.cwd()` | Working directory sent to app-server during init |

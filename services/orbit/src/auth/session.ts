@@ -1,5 +1,6 @@
 import { SignJWT, jwtVerify } from "jose";
 
+import type { AuthEnv } from "./env";
 import type { SessionPayload, StoredUser } from "./types";
 import { createSessionRecord, getSessionRecord, consumeRefreshToken, getUserById } from "./db";
 import { base64UrlEncode } from "./utils";
@@ -15,7 +16,7 @@ function parseBearerToken(req: Request): string | null {
   return header.slice(7).trim();
 }
 
-function getJwtSecret(env: CloudflareEnv): string {
+function getJwtSecret(env: AuthEnv): string {
   if (!env.ZANE_WEB_JWT_SECRET?.trim()) {
     throw new Error("ZANE_WEB_JWT_SECRET is required");
   }
@@ -43,7 +44,7 @@ export interface SessionTokens {
   refreshToken: string;
 }
 
-export async function verifySession(req: Request, env: CloudflareEnv): Promise<SessionPayload | null> {
+export async function verifySession(req: Request, env: AuthEnv): Promise<SessionPayload | null> {
   const token = parseBearerToken(req);
   if (!token) return null;
   try {
@@ -69,7 +70,7 @@ export async function verifySession(req: Request, env: CloudflareEnv): Promise<S
   }
 }
 
-export async function createSession(env: CloudflareEnv, user: StoredUser): Promise<SessionTokens> {
+export async function createSession(env: AuthEnv, user: StoredUser): Promise<SessionTokens> {
   const secret = getJwtSecret(env);
   const key = new TextEncoder().encode(secret);
   const now = Math.floor(Date.now() / 1000);
@@ -96,7 +97,7 @@ export interface RefreshResult {
   user: { id: string; name: string };
 }
 
-export async function refreshSession(env: CloudflareEnv, refreshToken: string): Promise<RefreshResult | null> {
+export async function refreshSession(env: AuthEnv, refreshToken: string): Promise<RefreshResult | null> {
   const hash = await hashRefreshToken(refreshToken);
   const now = Math.floor(Date.now() / 1000);
 

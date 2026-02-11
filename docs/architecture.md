@@ -7,10 +7,6 @@
               |
               | HTTPS + WebSocket
               v
-       Auth (passkey service)
-              |
-              | JWT
-              v
        Orbit (control plane)
               |
               | WebSocket relay (outbound from Mac)
@@ -40,25 +36,17 @@ Tech:
 
 ### 2) Orbit (control plane)
 Responsibilities:
-- Authenticate clients (via JWT from Auth service) and Anchor (via service JWT).
+- Handle passkey authentication and issue JWTs for web clients.
+- Authenticate clients (via user JWT) and Anchor (via service JWT).
 - Create a Durable Object per user (`idFromName(userId)`). All threads for a user share one DO.
 - Relay WebSocket messages between Anchor and client, routed by thread subscription.
 - Store thread events in D1 for reconnection and review (scoped by `user_id`).
 
 Tech:
 - Cloudflare Workers + Durable Objects + D1.
-
-### 3) Auth (passkey service)
-Responsibilities:
-- Passkey registration and login.
-- Issue JWTs for authenticated users.
-- Store sessions in D1 for revocation.
-
-Tech:
-- Cloudflare Workers + D1.
 - WebAuthn for passkey auth.
 
-### 4) Web Client (Mobile Web)
+### 3) Web Client (Mobile Web)
 Responsibilities:
 - Authenticate via passkeys.
 - Show list of threads and live output.
@@ -75,8 +63,8 @@ Hosting:
 ## Data Flows
 
 ### A) Authentication
-1. Client registers/logs in via passkey at Auth service.
-2. Auth service returns a JWT (stored in localStorage).
+1. Client registers/logs in via passkey at Orbit auth endpoints.
+2. Orbit returns a JWT (stored in localStorage).
 3. Client uses JWT to connect to Orbit and fetch events.
 
 ### B) Session (from Web Client)
@@ -124,7 +112,7 @@ WebSocket endpoint for Anchor. Requires JWT with `zane-orbit-anchor` audience.
 ### `GET /threads/:id/events`
 Fetch stored events for a thread (used for reconnection and review). Scoped by `user_id` from JWT.
 
-## Auth Endpoints
+## Auth Endpoints (served by Orbit)
 
 ### `GET /health`
 Health check.
