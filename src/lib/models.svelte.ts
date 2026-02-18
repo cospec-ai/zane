@@ -1,4 +1,4 @@
-import type { ModelOption, RpcMessage } from "./types";
+import type { ModelOption, ReasoningEffort, RpcMessage } from "./types";
 import { socket } from "./socket.svelte";
 
 type FetchStatus = "idle" | "loading" | "success" | "error";
@@ -6,6 +6,9 @@ type FetchStatus = "idle" | "loading" | "success" | "error";
 class ModelsStore {
   options = $state<ModelOption[]>([]);
   status = $state<FetchStatus>("idle");
+  defaultModel = $derived(
+    this.options.find((option) => option.isDefault) ?? this.options[0] ?? null
+  );
 
   #requestId: number | null = null;
 
@@ -59,7 +62,10 @@ class ModelsStore {
     // Handle different response shapes
     const items = this.#extractArray(result);
 
-    return items.map((item) => this.#parseModelItem(item)).filter((m): m is ModelOption => m !== null);
+    return items
+      .map((item) => this.#parseModelItem(item))
+      .filter((m): m is ModelOption => m !== null)
+      .filter((model) => !model.hidden);
   }
 
   #extractArray(result: unknown): unknown[] {
@@ -82,7 +88,56 @@ class ModelsStore {
     if (!value) return null;
 
     const label = String(obj.label ?? obj.displayName ?? obj.title ?? value);
-    return { value, label };
+
+    const supportedReasoningEfforts = this.#parseReasoningEfforts(obj.supportedReasoningEfforts);
+    const defaultReasoningEffort = this.#parseReasoningEffort(obj.defaultReasoningEffort);
+
+    return {
+      value,
+      label,
+      model: this.#stringOrUndefined(obj.model),
+      upgrade: this.#stringOrNull(obj.upgrade),
+      description: this.#stringOrUndefined(obj.description),
+      hidden: Boolean(obj.hidden),
+      supportedReasoningEfforts,
+      defaultReasoningEffort,
+      inputModalities: this.#parseStringArray(obj.inputModalities),
+      supportsPersonality: typeof obj.supportsPersonality === "boolean" ? obj.supportsPersonality : undefined,
+      isDefault: typeof obj.isDefault === "boolean" ? obj.isDefault : undefined,
+    };
+  }
+
+  #stringOrUndefined(value: unknown): string | undefined {
+    return typeof value === "string" && value.trim() ? value : undefined;
+  }
+
+  #stringOrNull(value: unknown): string | null | undefined {
+    if (value === null) return null;
+    return this.#stringOrUndefined(value);
+  }
+
+  #parseStringArray(value: unknown): string[] | undefined {
+    if (!Array.isArray(value)) return undefined;
+    const parsed = value.filter((v): v is string => typeof v === "string" && v.trim().length > 0);
+    return parsed.length > 0 ? parsed : undefined;
+  }
+
+  #parseReasoningEfforts(value: unknown): ReasoningEffort[] | undefined {
+    if (!Array.isArray(value)) return undefined;
+    const efforts = value
+      .map((entry) => {
+        if (typeof entry === "string") return this.#parseReasoningEffort(entry);
+        if (!entry || typeof entry !== "object") return undefined;
+        return this.#parseReasoningEffort((entry as Record<string, unknown>).reasoningEffort);
+      })
+      .filter((effort): effort is ReasoningEffort => Boolean(effort));
+
+    return efforts.length > 0 ? [...new Set(efforts)] : undefined;
+  }
+
+  #parseReasoningEffort(value: unknown): ReasoningEffort | undefined {
+    if (value === "low" || value === "medium" || value === "high") return value;
+    return undefined;
   }
 }
 

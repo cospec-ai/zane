@@ -1,6 +1,7 @@
 import type { ApprovalPolicy, CollaborationMode, CollaborationModeMask, ModeKind, ReasoningEffort, SandboxMode, ThreadInfo, RpcMessage, ThreadSettings } from "./types";
 import { socket } from "./socket.svelte";
 import { messages } from "./messages.svelte";
+import { models } from "./models.svelte";
 import { navigate } from "../router";
 
 const STORE_KEY = "__zane_threads_store__";
@@ -22,6 +23,7 @@ class ThreadsStore {
   #nextId = 1;
   #pendingRequests = new Map<number, string>();
   #pendingStartInput: string | null = null;
+  #pendingStartModel: string | null = null;
   #pendingCollaborationMode: CollaborationMode | null = null;
   #pendingStartCallback: ((threadId: string) => void) | null = null;
   #suppressNextNavigation = false;
@@ -180,7 +182,7 @@ class ThreadsStore {
         if (thread?.id) {
           const sandbox = this.#normalizeSandbox(result.sandbox);
           this.updateSettings(thread.id, {
-            model: result.model ?? "",
+            model: result.model ?? this.#pendingStartModel ?? "",
             reasoningEffort: result.reasoningEffort ?? DEFAULT_SETTINGS.reasoningEffort,
             ...(sandbox ? { sandbox } : {}),
           });
@@ -191,6 +193,10 @@ class ThreadsStore {
             this.#handleNewThread(thread);
           }
         }
+      }
+
+      if (type === "start") {
+        this.#pendingStartModel = null;
       }
     }
   }
@@ -258,9 +264,11 @@ class ThreadsStore {
       collaborationMode?: CollaborationMode;
     }
   ) {
+    const requestedModel = this.#resolveStartModel(options?.collaborationMode);
     const id = this.#nextId++;
     this.#pendingRequests.set(id, "start");
     this.#pendingStartInput = input?.trim() ? input.trim() : null;
+    this.#pendingStartModel = requestedModel;
     this.#pendingCollaborationMode = options?.collaborationMode ?? null;
     this.#pendingStartCallback = options?.onThreadStarted ?? null;
     this.#suppressNextNavigation = options?.suppressNavigation ?? false;
@@ -269,10 +277,17 @@ class ThreadsStore {
       id,
       params: {
         cwd,
+        ...(requestedModel ? { model: requestedModel } : {}),
         ...(options?.approvalPolicy ? { approvalPolicy: options.approvalPolicy } : {}),
         ...(options?.sandbox ? { sandbox: options.sandbox } : {}),
       },
     });
+  }
+
+  #resolveStartModel(collaborationMode?: CollaborationMode): string | null {
+    const collabModel = collaborationMode?.settings?.model?.trim();
+    if (collabModel) return collabModel;
+    return models.defaultModel?.value ?? null;
   }
 
   #loadSettings() {

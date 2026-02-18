@@ -41,7 +41,7 @@
   // Default to first available model
   $effect(() => {
     if (!taskModel && models.options.length > 0) {
-      taskModel = models.options[0].value;
+      taskModel = models.defaultModel?.value ?? models.options[0].value;
     }
   });
 
@@ -55,7 +55,7 @@
     taskProject = "";
     taskPlanFirst = true;
     permissionLevel = "standard";
-    taskModel = models.options[0]?.value ?? "";
+    taskModel = models.defaultModel?.value ?? models.options[0]?.value ?? "";
   }
 
   async function handleCreateTask(e?: Event) {

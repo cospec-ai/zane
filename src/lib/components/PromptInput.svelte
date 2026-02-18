@@ -41,12 +41,25 @@
     { value: "high", label: "High" },
   ];
 
+  const selectedModelOption = $derived(modelOptions.find((m) => m.value === model));
+  const availableReasoningOptions = $derived.by(() => {
+    const supported = selectedModelOption?.supportedReasoningEfforts;
+    if (!supported?.length) return reasoningOptions;
+    const map = new Map(reasoningOptions.map((option) => [option.value, option]));
+    const filtered = supported
+      .map((effort) => map.get(effort))
+      .filter((option): option is { value: ReasoningEffort; label: string } => Boolean(option));
+    return filtered.length > 0 ? filtered : reasoningOptions;
+  });
+
   const selectedModel = $derived(
     modelOptions.find((m) => m.value === model)?.label || model || "Model"
   );
 
   const selectedReasoning = $derived(
-    reasoningOptions.find((r) => r.value === reasoningEffort)?.label || "Medium"
+    availableReasoningOptions.find((r) => r.value === reasoningEffort)?.label ||
+      reasoningOptions.find((r) => r.value === reasoningEffort)?.label ||
+      "Medium"
   );
 
   function handleSubmit(e: Event) {
@@ -169,7 +182,7 @@
           </button>
           {#if reasoningOpen}
             <div class="dropdown-menu">
-              {#each reasoningOptions as option}
+              {#each availableReasoningOptions as option}
                 <button
                   type="button"
                   class="dropdown-item split"

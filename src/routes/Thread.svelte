@@ -27,6 +27,7 @@
     let turnStartTime = $state<number | undefined>(undefined);
 
     const threadId = $derived(route.params.id);
+    const selectedModelOption = $derived(models.options.find((option) => option.value === model) ?? null);
 
 
     $effect(() => {
@@ -49,6 +50,19 @@
     $effect(() => {
         if (!threadId) return;
         threads.updateSettings(threadId, { model, reasoningEffort, sandbox, mode });
+    });
+
+    $effect(() => {
+        if (!selectedModelOption?.supportedReasoningEfforts?.length) return;
+        if (selectedModelOption.supportedReasoningEfforts.includes(reasoningEffort)) return;
+
+        const nextReasoning =
+            selectedModelOption.defaultReasoningEffort &&
+            selectedModelOption.supportedReasoningEfforts.includes(selectedModelOption.defaultReasoningEffort)
+                ? selectedModelOption.defaultReasoningEffort
+                : selectedModelOption.supportedReasoningEfforts[0];
+
+        reasoningEffort = nextReasoning;
     });
 
     $effect(() => {

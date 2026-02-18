@@ -17,6 +17,15 @@ export type ApprovalPolicy = "on-request" | "never";
 export interface ModelOption {
   value: string;
   label: string;
+  model?: string;
+  upgrade?: string | null;
+  description?: string;
+  hidden?: boolean;
+  supportedReasoningEfforts?: ReasoningEffort[];
+  defaultReasoningEffort?: ReasoningEffort;
+  inputModalities?: string[];
+  supportsPersonality?: boolean;
+  isDefault?: boolean;
 }
 
 export type ReasoningEffort = "low" | "medium" | "high";
