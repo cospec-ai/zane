@@ -5,7 +5,6 @@ import type { WsClient } from "./types";
 
 const PORT = Number(process.env.ANCHOR_PORT ?? 8788);
 const ORBIT_URL = process.env.ANCHOR_ORBIT_URL ?? "";
-const ANCHOR_APP_CWD = process.env.ANCHOR_APP_CWD ?? process.cwd();
 const ANCHOR_JWT_TTL_SEC = Number(process.env.ANCHOR_JWT_TTL_SEC ?? 300);
 const AUTH_URL = process.env.AUTH_URL ?? "";
 const FORCE_LOGIN = process.env.ZANE_FORCE_LOGIN === "1";
@@ -32,7 +31,6 @@ let appServerInitialized = false;
 const APPROVAL_METHODS = new Set([
   "item/fileChange/requestApproval",
   "item/commandExecution/requestApproval",
-  "item/mcpToolCall/requestApproval",
   "item/tool/requestUserInput",
 ]);
 const pendingApprovals = new Map<string, string>(); // threadId → raw JSON line
@@ -134,15 +132,17 @@ function initializeAppServer(): void {
     method: "initialize",
     id: Date.now(),
     params: {
-      cwd: ANCHOR_APP_CWD,
       clientInfo: {
         name: "zane-anchor",
+        title: "Zane Anchor",
         version: "dev",
-        platform: process.platform,
+      },
+      capabilities: {
+        experimentalApi: true,
       },
     },
   });
-  console.log(`[anchor] app-server initialize: cwd=${ANCHOR_APP_CWD}`);
+  console.log("[anchor] app-server initialize");
   sendToAppServer(initPayload + "\n");
   appServerInitialized = true;
 }
