@@ -25,43 +25,56 @@ class MessagesStore {
   #turnCompleteCallbacks = new Map<string, TurnCompleteCallback>();
   #pendingAgentMessageIds = new Map<string, string>();
 
-  // Streaming reasoning state (reactive)
-  #streamingReasoningText = $state<string>("");
-  #isReasoningStreaming = $state<boolean>(false);
+  // Streaming reasoning state (reactive, per thread)
+  #streamingReasoningTextByThread = $state<Map<string, string>>(new Map());
+  #isReasoningStreamingByThread = $state<Map<string, boolean>>(new Map());
 
-  // Turn state
-  #currentTurnId = $state<string | null>(null);
-  #currentTurnStatus = $state<TurnStatus | null>(null);
-  #interruptPending = false;
-  #currentPlan = $state<PlanStep[]>([]);
-  #planExplanation = $state<string | null>(null);
-  #statusDetail = $state<string | null>(null);
+  // Turn state (per thread)
+  #turnIdByThread = $state<Map<string, string>>(new Map());
+  #turnStatusByThread = $state<Map<string, TurnStatus>>(new Map());
+  #interruptPendingByThread = new Set<string>();
+  #planByThread = $state<Map<string, PlanStep[]>>(new Map());
+  #planExplanationByThread = $state<Map<string, string | null>>(new Map());
+  #statusDetailByThread = $state<Map<string, string | null>>(new Map());
 
   get turnStatus() {
-    return this.#currentTurnStatus;
+    const threadId = threads.currentId;
+    if (!threadId) return null;
+    return this.#turnStatusByThread.get(threadId) ?? null;
   }
   get plan() {
-    return this.#currentPlan;
+    const threadId = threads.currentId;
+    if (!threadId) return [];
+    return this.#planByThread.get(threadId) ?? [];
   }
   get planExplanation() {
-    return this.#planExplanation;
+    const threadId = threads.currentId;
+    if (!threadId) return null;
+    return this.#planExplanationByThread.get(threadId) ?? null;
   }
   get statusDetail() {
-    return this.#statusDetail;
+    const threadId = threads.currentId;
+    if (!threadId) return null;
+    return this.#statusDetailByThread.get(threadId) ?? null;
   }
   get isReasoningStreaming() {
-    return this.#isReasoningStreaming;
+    const threadId = threads.currentId;
+    if (!threadId) return false;
+    return this.#isReasoningStreamingByThread.get(threadId) ?? false;
   }
   get streamingReasoningText() {
-    return this.#streamingReasoningText;
+    const threadId = threads.currentId;
+    if (!threadId) return "";
+    return this.#streamingReasoningTextByThread.get(threadId) ?? "";
   }
 
   interrupt(threadId: string): { success: boolean; error?: string } {
-    const turnId = this.#currentTurnId;
-    if (!turnId || (this.#currentTurnStatus ?? "").toLowerCase() !== "inprogress") {
+    const turnId = this.#turnIdByThread.get(threadId);
+    const turnStatus = this.#turnStatusByThread.get(threadId) ?? null;
+    if (!turnId || (turnStatus ?? "").toLowerCase() !== "inprogress") {
       return { success: true };
     }
-    if (this.#interruptPending) {
+    if (this.#interruptPendingByThread.has(threadId)) {
       return { success: true };
     }
 
@@ -72,7 +85,7 @@ class MessagesStore {
     });
 
     if (result.success) {
-      this.#interruptPending = true;
+      this.#interruptPendingByThread.add(threadId);
     }
     return result;
   }
@@ -87,6 +100,7 @@ class MessagesStore {
   clearThread(threadId: string) {
     this.#byThread.delete(threadId);
     this.#loadedThreads.delete(threadId);
+    this.#interruptPendingByThread.delete(threadId);
     for (const key of this.#streamingText.keys()) {
       if (key.startsWith(`${threadId}:`)) {
         this.#streamingText.delete(key);
@@ -309,8 +323,8 @@ class MessagesStore {
 
   #resetReasoningState(threadId: string) {
     this.#reasoningByThread.set(threadId, { buffer: "", full: "", mode: null, header: null });
-    this.#isReasoningStreaming = false;
-    this.#streamingReasoningText = "";
+    this.#isReasoningStreamingByThread = new Map(this.#isReasoningStreamingByThread).set(threadId, false);
+    this.#streamingReasoningTextByThread = new Map(this.#streamingReasoningTextByThread).set(threadId, "");
   }
 
   #appendReasoningDelta(threadId: string, delta: string, mode: ReasoningMode) {
@@ -323,13 +337,13 @@ class MessagesStore {
     state.buffer += delta;
 
     // Update reactive streaming state
-    this.#isReasoningStreaming = true;
-    this.#streamingReasoningText = state.full + state.buffer;
+    this.#isReasoningStreamingByThread = new Map(this.#isReasoningStreamingByThread).set(threadId, true);
+    this.#streamingReasoningTextByThread = new Map(this.#streamingReasoningTextByThread).set(threadId, state.full + state.buffer);
 
     const header = this.#extractFirstBold(state.buffer);
     if (header) {
       state.header = header;
-      this.#statusDetail = header;
+      this.#statusDetailByThread = new Map(this.#statusDetailByThread).set(threadId, header);
     }
   }
 
@@ -340,7 +354,7 @@ class MessagesStore {
       state.buffer = "";
     }
     state.full += "\n\n";
-    this.#streamingReasoningText = state.full;
+    this.#streamingReasoningTextByThread = new Map(this.#streamingReasoningTextByThread).set(threadId, state.full);
   }
 
   #finaliseReasoning(threadId: string, item: Record<string, unknown>) {
@@ -358,8 +372,8 @@ class MessagesStore {
     state.header = null;
 
     // Reset streaming state
-    this.#isReasoningStreaming = false;
-    this.#streamingReasoningText = "";
+    this.#isReasoningStreamingByThread = new Map(this.#isReasoningStreamingByThread).set(threadId, false);
+    this.#streamingReasoningTextByThread = new Map(this.#streamingReasoningTextByThread).set(threadId, "");
 
     const summary = this.#extractReasoningSummary(full);
     if (!summary) return;
@@ -551,12 +565,12 @@ class MessagesStore {
     if (method === "turn/started") {
       const turn = params.turn as { id: string; status?: string } | undefined;
       if (turn) {
-        this.#currentTurnId = turn.id;
-        this.#currentTurnStatus = (turn.status as TurnStatus) || "InProgress";
-        this.#interruptPending = false;
-        this.#currentPlan = [];
-        this.#planExplanation = null;
-        this.#statusDetail = null;
+        this.#turnIdByThread = new Map(this.#turnIdByThread).set(threadId, turn.id);
+        this.#turnStatusByThread = new Map(this.#turnStatusByThread).set(threadId, (turn.status as TurnStatus) || "InProgress");
+        this.#interruptPendingByThread.delete(threadId);
+        this.#planByThread = new Map(this.#planByThread).set(threadId, []);
+        this.#planExplanationByThread = new Map(this.#planExplanationByThread).set(threadId, null);
+        this.#statusDetailByThread = new Map(this.#statusDetailByThread).set(threadId, null);
         this.#resetReasoningState(threadId);
       }
       return;
@@ -566,9 +580,9 @@ class MessagesStore {
     if (method === "turn/completed") {
       const turn = params.turn as { id: string; status?: string } | undefined;
       if (turn) {
-        this.#currentTurnStatus = (turn.status as TurnStatus) || "Completed";
-        this.#interruptPending = false;
-        this.#statusDetail = null;
+        this.#turnStatusByThread = new Map(this.#turnStatusByThread).set(threadId, (turn.status as TurnStatus) || "Completed");
+        this.#interruptPendingByThread.delete(threadId);
+        this.#statusDetailByThread = new Map(this.#statusDetailByThread).set(threadId, null);
 
         // Clear pending live messages for this thread — turn is done
         for (const [id, msg] of this.#pendingLiveMessages) {
@@ -592,13 +606,13 @@ class MessagesStore {
       const plan = params.plan as Array<{ step: string; status: string }> | undefined;
 
       if (explanation) {
-        this.#planExplanation = explanation;
+        this.#planExplanationByThread = new Map(this.#planExplanationByThread).set(threadId, explanation);
       }
       if (plan) {
-        this.#currentPlan = plan.map((p) => ({
+        this.#planByThread = new Map(this.#planByThread).set(threadId, plan.map((p) => ({
           step: p.step,
           status: p.status as PlanStep["status"],
-        }));
+        })));
       }
       return;
     }
@@ -610,7 +624,7 @@ class MessagesStore {
       const questions = (params.questions as UserInputQuestion[]) || [];
 
       // A pending request means a turn is actively waiting
-      this.#currentTurnStatus = "InProgress";
+      this.#turnStatusByThread = new Map(this.#turnStatusByThread).set(threadId, "InProgress");
 
       const userInputRequest: UserInputRequest = {
         rpcId,
@@ -641,7 +655,7 @@ class MessagesStore {
       const rpcId = msg.id as number; // Capture the request ID for response
 
       // A pending approval means a turn is actively waiting
-      this.#currentTurnStatus = "InProgress";
+      this.#turnStatusByThread = new Map(this.#turnStatusByThread).set(threadId, "InProgress");
 
       // Determine type from method name
       let approvalType: ApprovalRequest["type"] = "other";
