@@ -13,7 +13,7 @@ Zane runs a local Anchor service on your Mac that connects to Orbit (the hosted 
 Run the install script:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/z-siddiqi/zane/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/cospec-ai/zane/main/install.sh | bash
 ```
 
 This clones the repo to `~/.zane`, installs Anchor dependencies, and adds `zane` to your PATH.
@@ -21,7 +21,7 @@ This clones the repo to `~/.zane`, installs Anchor dependencies, and adds `zane`
 ### Build from source
 
 ```bash
-git clone https://github.com/z-siddiqi/zane.git ~/.zane
+git clone https://github.com/cospec-ai/zane.git ~/.zane
 cd ~/.zane/services/anchor && bun install
 ```
 

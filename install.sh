@@ -2,10 +2,10 @@
 set -euo pipefail
 
 # ── Zane Installer ──────────────────────────────
-# Usage: curl -fsSL https://raw.githubusercontent.com/z-siddiqi/zane/main/install.sh | bash
+# Usage: curl -fsSL https://raw.githubusercontent.com/cospec-ai/zane/main/install.sh | bash
 
 ZANE_HOME="${ZANE_HOME:-$HOME/.zane}"
-ZANE_REPO="${ZANE_REPO:-https://github.com/z-siddiqi/zane.git}"
+ZANE_REPO="${ZANE_REPO:-https://github.com/cospec-ai/zane.git}"
 ZANE_BRANCH="${ZANE_BRANCH:-}"
 
 # ── Colors ──────────────────────────────────────

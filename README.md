@@ -14,7 +14,7 @@ Zane lets you monitor and control [Codex CLI](https://github.com/openai/codex) s
 - **Push notifications** -- get notified on your phone for approvals and important session events
 - **No port forwarding** -- Anchor connects outbound to Cloudflare; no open ports on your Mac
 - **Passkey auth** -- WebAuthn passkeys, no passwords
-- **Self-host option** -- deploy the entire stack to your own Cloudflare account
+- **Self-host first** -- run Orbit and Pages in your own Cloudflare account
 
 ## How it works
 
@@ -36,11 +36,6 @@ Zane lets you monitor and control [Codex CLI](https://github.com/openai/codex) s
 
 **Anchor** is a lightweight daemon on your Mac that spawns `codex app-server` and relays structured JSON-RPC messages. **Orbit** is a Cloudflare Worker + Durable Object that handles passkey auth, push notification fan-out, and WebSocket relay between your devices and Anchor. The **web client** is a static Svelte app on Cloudflare Pages.
 
-## Deployment modes
-
-- Default: managed Orbit control plane (no Cloudflare setup required).
-- Optional: full self-host on your own Cloudflare account via `zane self-host`.
-
 ## Quick start
 
 ### Requirements
@@ -52,12 +47,13 @@ Zane lets you monitor and control [Codex CLI](https://github.com/openai/codex) s
 ### Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/z-siddiqi/zane/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/cospec-ai/zane/main/install.sh | bash
 ```
 
 ### Run
 
 ```bash
+zane self-host
 zane start
 ```
 
@@ -68,7 +64,7 @@ On first run:
 3. You sign in with your passkey.
 4. Anchor connects to Orbit and is ready for commands from the web client.
 
-By default, this uses the managed Orbit control plane. Use `zane self-host` first if you want your own Cloudflare deployment.
+This path deploys and uses your own Cloudflare account, and is the current generally available setup. Managed Orbit access is currently waitlist-only.
 
 ## CLI
 
@@ -81,16 +77,6 @@ By default, this uses the managed Orbit control plane. Use `zane self-host` firs
 | `zane update` | Pull latest and reinstall |
 | `zane self-host` | Deploy to your own Cloudflare account |
 | `zane uninstall` | Remove Zane |
-
-## Self-hosting (optional)
-
-Zane can be fully self-hosted on your own Cloudflare account:
-
-```bash
-zane self-host
-```
-
-The wizard creates a D1 database, deploys Orbit (auth + relay), builds the web client to Cloudflare Pages, and configures your Anchor. See the [self-hosting guide](docs/self-hosting.md) for prerequisites and details.
 
 ## Documentation
 

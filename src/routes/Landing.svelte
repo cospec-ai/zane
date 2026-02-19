@@ -82,7 +82,7 @@
   </section>
 
   <footer class="landing-footer">
-    <a class="footer-link" href="https://github.com/z-siddiqi/zane" target="_blank" rel="noopener">GitHub</a>
+    <a class="footer-link" href="https://github.com/cospec-ai/zane" target="_blank" rel="noopener">GitHub</a>
   </footer>
 
   {#if showAuthModal}
