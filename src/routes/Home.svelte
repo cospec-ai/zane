@@ -1,86 +1,15 @@
 <script lang="ts">
   import { socket } from "../lib/socket.svelte";
   import { threads } from "../lib/threads.svelte";
-  import { models } from "../lib/models.svelte";
   import { theme } from "../lib/theme.svelte";
   import AppHeader from "../lib/components/AppHeader.svelte";
-  import ProjectPicker from "../lib/components/ProjectPicker.svelte";
   import ShimmerDot from "../lib/components/ShimmerDot.svelte";
+  import TaskComposer from "../lib/components/TaskComposer.svelte";
 
   const themeIcons = { system: "◐", light: "○", dark: "●" } as const;
+  const RECENT_LIMIT = 5;
 
-  const permissionPresets = {
-    cautious: {
-      label: "Cautious",
-      detail: "Read-only, always ask",
-      approvalPolicy: "on-request",
-      sandbox: "read-only",
-    },
-    standard: {
-      label: "Standard",
-      detail: "Workspace write, ask",
-      approvalPolicy: "on-request",
-      sandbox: "workspace-write",
-    },
-    autonomous: {
-      label: "Autonomous",
-      detail: "Full access, no prompts",
-      approvalPolicy: "never",
-      sandbox: "danger-full-access",
-    },
-  } as const;
-
-  let showTaskModal = $state(false);
-  let taskNote = $state("");
-  let taskProject = $state("");
-  let taskModel = $state("");
-  let taskPlanFirst = $state(true);
-  let permissionLevel = $state<keyof typeof permissionPresets>("standard");
   let isCreating = $state(false);
-
-  // Default to first available model
-  $effect(() => {
-    if (!taskModel && models.options.length > 0) {
-      taskModel = models.defaultModel?.value ?? models.options[0].value;
-    }
-  });
-
-  function openTaskModal() {
-    showTaskModal = true;
-  }
-
-  function closeTaskModal() {
-    showTaskModal = false;
-    taskNote = "";
-    taskProject = "";
-    taskPlanFirst = true;
-    permissionLevel = "standard";
-    taskModel = models.defaultModel?.value ?? models.options[0]?.value ?? "";
-  }
-
-  async function handleCreateTask(e?: Event) {
-    e?.preventDefault();
-    if (!taskNote.trim() || !taskProject.trim() || isCreating) return;
-
-    isCreating = true;
-    try {
-      const preset = permissionPresets[permissionLevel];
-      threads.start(taskProject, taskNote, {
-        approvalPolicy: preset.approvalPolicy,
-        sandbox: preset.sandbox,
-        suppressNavigation: false,
-        collaborationMode: taskPlanFirst
-          ? threads.resolveCollaborationMode("plan", taskModel)
-          : undefined,
-      });
-
-      closeTaskModal();
-    } catch (err) {
-      console.error("Failed to create task:", err);
-    } finally {
-      isCreating = false;
-    }
-  }
 
   function formatTime(ts?: number): string {
     if (!ts) return "";
@@ -93,12 +22,30 @@
     });
   }
 
-  const visibleThreads = $derived(threads.list);
+  const recentThreads = $derived(threads.list.slice(0, RECENT_LIMIT));
+  const hasMoreThreads = $derived(threads.list.length > RECENT_LIMIT);
+
+  async function handleCreateTask(
+    e: CustomEvent<{
+      task: string;
+      project: string;
+    }>
+  ) {
+    const { task, project } = e.detail;
+    if (isCreating) return;
+    isCreating = true;
+    try {
+      threads.start(project, task);
+    } catch (err) {
+      console.error("Failed to create task:", err);
+    } finally {
+      isCreating = false;
+    }
+  }
 
   $effect(() => {
     if (socket.status === "connected") {
       threads.fetch();
-      threads.fetchCollaborationPresets();
     }
   });
 </script>
@@ -125,154 +72,204 @@
   {/if}
 
   {#if socket.status === "connected"}
-    <div class="threads-section stack">
-      <div class="section-header split">
-        <div class="section-title-row row">
-          <span class="section-title">Threads</span>
-          <button class="refresh-btn" onclick={() => threads.fetch()} title="Refresh">↻</button>
+    <main class="home-content stack">
+      <section class="section stack">
+        <div class="section-header">
+          <span class="section-title">New Task</span>
         </div>
-        <div class="section-actions row">
-          <button class="new-task-link" type="button" onclick={openTaskModal}>New task</button>
+        <div class="section-body stack">
+          <TaskComposer busy={isCreating} showTitle={false} on:submit={handleCreateTask} />
         </div>
-      </div>
+      </section>
 
-      {#if threads.loading}
-        <div class="loading row">
-          <ShimmerDot /> Loading threads...
-        </div>
-      {:else if visibleThreads.length === 0}
-        <div class="empty row">No threads yet. Create one above.</div>
-      {:else}
-        <ul class="thread-list">
-          {#each visibleThreads as thread (thread.id)}
-            <li class="thread-item row">
-              <a class="thread-link row" href="/thread/{thread.id}">
-                <span class="thread-icon">›</span>
-                <span class="thread-preview">{thread.preview || "New thread"}</span>
-                <span class="thread-meta">{formatTime(thread.createdAt)}</span>
-              </a>
-              <button
-                class="archive-btn"
-                onclick={() => threads.archive(thread.id)}
-                title="Archive thread"
-              >×</button>
-            </li>
-          {/each}
-        </ul>
-      {/if}
-    </div>
-  {/if}
-
-  {#if showTaskModal}
-    <!-- svelte-ignore a11y_no_static_element_interactions a11y_click_events_have_key_events -->
-    <div class="modal-overlay" role="presentation" onclick={closeTaskModal}></div>
-    <div class="task-modal" role="dialog" aria-modal="true">
-      <div class="modal-header">
-        <span>New task</span>
-        <button class="modal-close" type="button" onclick={closeTaskModal}>×</button>
-      </div>
-      <form class="modal-body stack" onsubmit={handleCreateTask}>
-        <div class="field stack">
-          <label for="task-note">task</label>
-          <textarea
-            id="task-note"
-            rows="4"
-            bind:value={taskNote}
-            placeholder="What do you want to do?"
-          ></textarea>
+      <section class="section stack">
+        <div class="section-header split">
+          <div class="section-title-row row">
+            <span class="section-title">Recent Sessions</span>
+          </div>
+          <div class="section-actions row">
+            <button class="refresh-btn" onclick={() => threads.fetch()} title="Refresh">↻</button>
+          </div>
         </div>
 
-        <div class="field stack">
-          <label for="task-project">project</label>
-          <ProjectPicker bind:value={taskProject} />
-        </div>
-
-        <div class="field stack">
-          <label for="task-model">model</label>
-          <select id="task-model" bind:value={taskModel}>
-            {#if models.status === "loading"}
-              <option value="">Loading...</option>
-            {:else if models.options.length === 0}
-              <option value="">No models available</option>
-            {:else}
-              {#each models.options as option}
-                <option value={option.value}>{option.label}</option>
+        <div class="section-body stack">
+          {#if threads.loading}
+            <div class="loading row">
+              <ShimmerDot /> Loading sessions...
+            </div>
+          {:else if recentThreads.length === 0}
+            <div class="empty row">No sessions yet. Start a task above.</div>
+          {:else}
+            <ul class="recent-list">
+              {#each recentThreads as thread (thread.id)}
+                <li class="recent-item">
+                  <div class="recent-row row">
+                    <a class="recent-link stack" href="/thread/{thread.id}">
+                      <span class="recent-preview">{thread.preview || "New session"}</span>
+                      <span class="recent-meta">{formatTime(thread.createdAt)}</span>
+                    </a>
+                    <button
+                      class="archive-btn"
+                      onclick={() => threads.archive(thread.id)}
+                      title="Archive session"
+                    >×</button>
+                  </div>
+                </li>
               {/each}
+            </ul>
+            {#if hasMoreThreads}
+              <div class="hint">
+                Showing {RECENT_LIMIT} of {threads.list.length}. <a class="view-all-inline" href="/sessions">View all.</a>
+              </div>
             {/if}
-          </select>
+          {/if}
         </div>
-
-        <div class="field stack">
-          <label for="task-permissions">permissions</label>
-          <select id="task-permissions" bind:value={permissionLevel}>
-            {#each Object.entries(permissionPresets) as [key, preset]}
-              <option value={key}>{preset.label} — {preset.detail}</option>
-            {/each}
-          </select>
-        </div>
-
-        <label class="checkbox-field">
-          <input type="checkbox" bind:checked={taskPlanFirst} />
-          <span>Plan first</span>
-        </label>
-
-        <div class="modal-actions row">
-          <button type="button" class="ghost-btn" onclick={closeTaskModal} disabled={isCreating}>Cancel</button>
-          <button type="submit" class="primary-btn" disabled={!taskNote.trim() || !taskProject.trim() || isCreating}>
-            {isCreating ? "Starting..." : taskPlanFirst ? "Start planning" : "Start task"}
-          </button>
-        </div>
-      </form>
-    </div>
+      </section>
+    </main>
   {/if}
 </div>
 
 <style>
   .home {
-    --stack-gap: 0;
     min-height: 100vh;
     background: var(--cli-bg);
     color: var(--cli-text);
     font-family: var(--font-mono);
     font-size: var(--text-sm);
+    --stack-gap: 0;
   }
 
-  .field {
-    --stack-gap: var(--space-xs);
+  .home-content {
+    width: 100%;
+    max-width: var(--app-max-width);
+    margin: 0 auto;
+    padding: var(--space-lg) var(--space-md) var(--space-xl);
+    --stack-gap: var(--space-md);
   }
 
-  .field label {
+  .section {
+    --stack-gap: 0;
+    border: 1px solid var(--cli-border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+  }
+
+  .section-header {
+    --split-gap: var(--space-sm);
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding: var(--space-sm) var(--space-md);
+    background: var(--cli-bg-elevated);
+    border-bottom: 1px solid var(--cli-border);
+    min-width: 0;
+  }
+
+  .section-body {
+    --stack-gap: var(--space-sm);
+    padding: var(--space-md);
+    background: var(--cli-bg);
+  }
+
+  .section-title-row {
+    --row-gap: var(--space-xs);
+    align-items: center;
+  }
+
+  .section-title {
     color: var(--cli-text-dim);
     font-size: var(--text-xs);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
   }
 
-  .field select {
-    padding: var(--space-sm);
-    background: var(--cli-bg);
+  .section-actions {
+    --row-gap: var(--space-sm);
+  }
+
+  .refresh-btn {
+    padding: var(--space-xs);
+    border: none;
+    background: transparent;
+    color: var(--cli-text-muted);
+    font-size: var(--text-base);
+    cursor: pointer;
+  }
+
+  .refresh-btn:hover {
+    color: var(--cli-text);
+  }
+
+  .recent-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: var(--space-sm);
+  }
+
+  .recent-item {
     border: 1px solid var(--cli-border);
     border-radius: var(--radius-sm);
+    background: var(--cli-bg);
+    overflow: hidden;
+  }
+
+  .recent-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: stretch;
+    gap: 0;
+    min-width: 0;
+  }
+
+  .recent-link {
+    width: 100%;
+    min-width: 0;
+    text-decoration: none;
+    color: inherit;
+    padding: var(--space-sm);
+    --stack-gap: 2px;
+    overflow: hidden;
+  }
+
+  .recent-link:hover {
+    background: var(--cli-selection);
+  }
+
+  .recent-preview {
     color: var(--cli-text);
-    font-family: var(--font-mono);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
-  .field select:focus {
-    outline: none;
-    border-color: var(--cli-prefix-agent);
+  .recent-meta {
+    color: var(--cli-text-muted);
+    font-size: var(--text-xs);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
-  .checkbox-field {
-    display: flex;
-    align-items: center;
-    gap: var(--space-sm);
+  .archive-btn {
+    border: none;
+    border-left: 1px solid var(--cli-border);
+    background: transparent;
+    color: var(--cli-text-muted);
+    font-size: var(--text-base);
+    min-width: 2.2rem;
     cursor: pointer;
-    font-size: var(--text-sm);
-    color: var(--cli-text);
   }
 
-  .checkbox-field input[type="checkbox"] {
-    width: 1rem;
-    height: 1rem;
-    accent-color: var(--cli-prefix-agent);
+  .archive-btn:hover {
+    color: var(--cli-error);
+    background: var(--cli-selection);
+  }
+
+  .loading,
+  .empty,
+  .hint {
+    color: var(--cli-text-muted);
+    font-size: var(--text-xs);
   }
 
   .error {
@@ -287,239 +284,12 @@
     font-weight: 600;
   }
 
-  .threads-section {
-    flex: 1;
-    --stack-gap: 0;
-  }
-
-  .modal-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(5, 7, 10, 0.6);
-    z-index: 40;
-  }
-
-  .task-modal {
-    position: fixed;
-    top: 12vh;
-    left: 50%;
-    transform: translateX(-50%);
-    width: min(560px, calc(100vw - 2rem));
-    background: var(--cli-bg-elevated);
-    border: 1px solid var(--cli-border);
-    border-radius: var(--radius-md);
-    z-index: 50;
-    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.35);
-  }
-
-  .modal-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: var(--space-sm) var(--space-md);
-    border-bottom: 1px solid var(--cli-border);
-    font-size: var(--text-xs);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--cli-text-muted);
-  }
-
-  .modal-close {
-    background: transparent;
-    border: none;
-    color: var(--cli-text-muted);
-    font-size: var(--text-lg);
-    cursor: pointer;
-  }
-
-  .modal-body {
-    padding: var(--space-md);
-    --stack-gap: var(--space-md);
-  }
-
-  .modal-body textarea,
-  .modal-body input,
-  .modal-body select {
-    padding: var(--space-sm);
-    background: var(--cli-bg);
-    border: 1px solid var(--cli-border);
-    border-radius: var(--radius-sm);
-    color: var(--cli-text);
-    font-family: var(--font-mono);
-  }
-
-  .modal-body textarea:focus,
-  .modal-body input:focus,
-  .modal-body select:focus {
-    outline: none;
-    border-color: var(--cli-prefix-agent);
-  }
-
-  .modal-actions {
-    justify-content: flex-end;
-    gap: var(--space-sm);
-  }
-
-  .ghost-btn,
-  .primary-btn {
-    padding: var(--space-xs) var(--space-sm);
-    border-radius: var(--radius-sm);
-    font-family: var(--font-mono);
-    font-size: var(--text-xs);
-    cursor: pointer;
-    text-decoration: none;
-  }
-
-  .ghost-btn {
-    background: transparent;
-    border: 1px solid var(--cli-border);
-    color: var(--cli-text-muted);
-  }
-
-  .primary-btn {
-    background: var(--cli-prefix-agent);
-    border: none;
-    color: var(--cli-bg);
-  }
-
-  .primary-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  .section-header {
-    --split-gap: var(--space-sm);
-    padding: var(--space-sm) 0 var(--space-sm) var(--space-md);
-    border-bottom: 1px solid var(--cli-border);
-  }
-
-  .section-title {
-    color: var(--cli-text-dim);
-    font-size: var(--text-xs);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-  }
-
-  .section-title-row {
-    --row-gap: var(--space-xs);
-    align-items: center;
-  }
-
-  .section-actions {
-    --row-gap: var(--space-sm);
-    padding-right: var(--space-sm);
-  }
-
-  .new-task-link {
-    padding: var(--space-sm);
-    background: var(--cli-bg);
-    appearance: none;
-    border: 1px solid var(--cli-border);
-    border-radius: var(--radius-sm);
-    color: var(--cli-text-dim);
-    font-family: var(--font-mono);
-    font-size: var(--text-xs);
-    text-decoration: none;
-    text-transform: lowercase;
-    transition: all var(--transition-fast);
-    cursor: pointer;
-  }
-
-  .new-task-link:hover {
-    background: var(--cli-selection);
-    color: var(--cli-text);
-    border-color: var(--cli-text-muted);
-  }
-
-  .refresh-btn {
-    padding: var(--space-sm);
-    background: transparent;
-    border: none;
-    color: var(--cli-text-muted);
-    font-size: var(--text-base);
-    cursor: pointer;
-    transition: color var(--transition-fast);
-  }
-
-  .refresh-btn:hover {
-    color: var(--cli-text);
-  }
-
-  .loading,
-  .empty {
-    --row-gap: var(--space-sm);
-    padding: var(--space-lg) var(--space-md);
-    color: var(--cli-text-muted);
-  }
-
-  .thread-list {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    flex: 1;
-    overflow-y: auto;
-  }
-
-  .thread-item {
-    --row-gap: 0;
-    border-bottom: 1px solid var(--cli-border);
-  }
-
-  .thread-item:last-child {
-    border-bottom: none;
-  }
-
-  .thread-link {
-    flex: 1;
-    min-width: 0;
-    --row-gap: var(--space-sm);
-    padding: var(--space-sm) var(--space-md);
-    text-decoration: none;
-    color: inherit;
-    transition: background var(--transition-fast);
-    background: transparent;
-    border: none;
-    text-align: left;
-    cursor: pointer;
-    font-family: inherit;
-    font-size: inherit;
-  }
-
-  .thread-link:hover {
-    background: var(--cli-selection);
-  }
-
-  .thread-icon {
+  .view-all-inline {
     color: var(--cli-prefix-agent);
-    font-weight: 600;
+    text-decoration: none;
   }
 
-  .thread-preview {
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    color: var(--cli-text);
-  }
-
-  .thread-meta {
-    flex-shrink: 0;
-    font-size: var(--text-xs);
-    color: var(--cli-text-muted);
-  }
-
-  .archive-btn {
-    padding: var(--space-sm) var(--space-md);
-    background: transparent;
-    border: none;
-    color: var(--cli-text-muted);
-    font-size: var(--text-base);
-    cursor: pointer;
-    transition: color var(--transition-fast);
-  }
-
-  .archive-btn:hover {
-    color: var(--cli-error);
+  .view-all-inline:hover {
+    text-decoration: underline;
   }
 </style>
