@@ -2,50 +2,121 @@
   import { socket } from "../lib/socket.svelte";
   import { threads } from "../lib/threads.svelte";
   import { theme } from "../lib/theme.svelte";
+  import { models } from "../lib/models.svelte";
+  import { worktrees } from "../lib/worktrees.svelte";
   import AppHeader from "../lib/components/AppHeader.svelte";
-  import ShimmerDot from "../lib/components/ShimmerDot.svelte";
-  import TaskComposer from "../lib/components/TaskComposer.svelte";
+  import HomeTaskComposer from "../lib/components/HomeTaskComposer.svelte";
+  import WorktreeModal from "../lib/components/WorktreeModal.svelte";
+  import RecentSessionsList from "../lib/components/RecentSessionsList.svelte";
+  import type { ModeKind } from "../lib/types";
 
   const themeIcons = { system: "◐", light: "○", dark: "●" } as const;
   const RECENT_LIMIT = 5;
 
-  let isCreating = $state(false);
-
-  function formatTime(ts?: number): string {
-    if (!ts) return "";
-    const date = new Date(ts * 1000);
-    return date.toLocaleDateString(undefined, {
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  }
-
   const recentThreads = $derived(threads.list.slice(0, RECENT_LIMIT));
   const hasMoreThreads = $derived(threads.list.length > RECENT_LIMIT);
 
-  async function handleCreateTask(
-    e: CustomEvent<{
-      task: string;
-      project: string;
-    }>
-  ) {
-    const { task, project } = e.detail;
-    if (isCreating) return;
+  let task = $state("");
+  let project = $state("");
+  let mode = $state<ModeKind>("code");
+  let selectedModel = $state("");
+  let worktreeModalOpen = $state(false);
+
+  let isCreating = $state(false);
+  let pendingStartToken: number | null = null;
+  let pendingStartTimeout: ReturnType<typeof setTimeout> | null = null;
+  let submitError = $state<string | null>(null);
+
+  const isConnected = $derived(socket.status === "connected");
+  const canSubmit = $derived(
+    isConnected && task.trim().length > 0 && project.trim().length > 0 && !isCreating
+  );
+
+  const currentModelLabel = $derived(
+    models.options.find((m) => m.value === selectedModel)?.label ||
+      selectedModel ||
+      "Select model"
+  );
+
+  const worktreeDisplay = $derived.by(() => {
+    if (!project) return "Select project";
+    const repo = worktrees.repoRoot
+      ? worktrees.repoRoot.split("/").filter(Boolean).pop()
+      : null;
+    const selected = worktrees.worktrees.find((wt) => wt.path === project);
+    const branch = selected?.branch;
+    if (repo && branch) return `${repo} / ${branch}`;
+    if (repo) return repo;
+    return project.split("/").filter(Boolean).pop() || project;
+  });
+
+  function clearPendingStart(token: number) {
+    if (pendingStartToken !== token) return;
+    pendingStartToken = null;
+    isCreating = false;
+    if (pendingStartTimeout) {
+      clearTimeout(pendingStartTimeout);
+      pendingStartTimeout = null;
+    }
+  }
+
+  function handleTaskChange(value: string) {
+    task = value;
+  }
+
+  function handleSelectModel(value: string) {
+    selectedModel = value;
+  }
+
+  async function handleProjectConfirm(value: string) {
+    project = value;
+    worktreeModalOpen = false;
+    worktrees.select(value);
+    if (!worktrees.repoRoot) {
+      await worktrees.inspect(value);
+    }
+  }
+
+  async function handleSubmit() {
+    if (!canSubmit || pendingStartToken !== null) return;
+    submitError = null;
+    const token = Date.now() + Math.floor(Math.random() * 1000);
+    pendingStartToken = token;
     isCreating = true;
+    pendingStartTimeout = setTimeout(() => clearPendingStart(token), 30000);
+
     try {
-      threads.start(project, task);
+      const effectiveModel = selectedModel.trim() || models.defaultModel?.value?.trim() || "";
+      const collaborationMode = effectiveModel
+        ? threads.resolveCollaborationMode(mode, effectiveModel, "medium")
+        : undefined;
+
+      threads.start(project.trim(), task.trim(), {
+        ...(collaborationMode ? { collaborationMode } : {}),
+        onThreadStarted: () => clearPendingStart(token),
+        onThreadStartFailed: (error) => {
+          submitError = error.message || "Failed to create task";
+          clearPendingStart(token);
+        },
+      });
     } catch (err) {
       console.error("Failed to create task:", err);
-    } finally {
-      isCreating = false;
+      submitError = err instanceof Error ? err.message : "Failed to create task";
+      clearPendingStart(token);
     }
   }
 
   $effect(() => {
+    if (!selectedModel && models.defaultModel) {
+      selectedModel = models.defaultModel.value;
+    }
+  });
+
+  $effect(() => {
     if (socket.status === "connected") {
       threads.fetch();
+      models.fetch();
+      threads.fetchCollaborationPresets();
     }
   });
 </script>
@@ -71,63 +142,54 @@
     </div>
   {/if}
 
-  {#if socket.status === "connected"}
-    <main class="home-content stack">
-      <section class="section stack">
-        <div class="section-header">
-          <span class="section-title">New Task</span>
-        </div>
-        <div class="section-body stack">
-          <TaskComposer busy={isCreating} showTitle={false} on:submit={handleCreateTask} />
-        </div>
-      </section>
-
-      <section class="section stack">
-        <div class="section-header split">
-          <div class="section-title-row row">
-            <span class="section-title">Recent Sessions</span>
-          </div>
-          <div class="section-actions row">
-            <button class="refresh-btn" onclick={() => threads.fetch()} title="Refresh">↻</button>
-          </div>
-        </div>
-
-        <div class="section-body stack">
-          {#if threads.loading}
-            <div class="loading row">
-              <ShimmerDot /> Loading sessions...
-            </div>
-          {:else if recentThreads.length === 0}
-            <div class="empty row">No sessions yet. Start a task above.</div>
-          {:else}
-            <ul class="recent-list">
-              {#each recentThreads as thread (thread.id)}
-                <li class="recent-item">
-                  <div class="recent-row row">
-                    <a class="recent-link stack" href="/thread/{thread.id}">
-                      <span class="recent-preview">{thread.preview || "New session"}</span>
-                      <span class="recent-meta">{formatTime(thread.createdAt)}</span>
-                    </a>
-                    <button
-                      class="archive-btn"
-                      onclick={() => threads.archive(thread.id)}
-                      title="Archive session"
-                    >×</button>
-                  </div>
-                </li>
-              {/each}
-            </ul>
-            {#if hasMoreThreads}
-              <div class="hint">
-                Showing {RECENT_LIMIT} of {threads.list.length}. <a class="view-all-inline" href="/sessions">View all.</a>
-              </div>
-            {/if}
-          {/if}
-        </div>
-      </section>
-    </main>
+  {#if submitError}
+    <div class="error row">
+      <span class="error-icon">!</span>
+      <span class="error-text">{submitError}</span>
+    </div>
   {/if}
+
+  <main class="hero">
+    <div class="hero-content">
+      <HomeTaskComposer
+        task={task}
+        mode={mode}
+        {isCreating}
+        {canSubmit}
+        {worktreeDisplay}
+        {currentModelLabel}
+        modelsStatus={models.status}
+        modelOptions={models.options}
+        {selectedModel}
+        on:taskChange={(e) => handleTaskChange(e.detail.value)}
+        on:toggleMode={() => {
+          mode = mode === "plan" ? "code" : "plan";
+        }}
+        on:openWorktrees={() => {
+          worktreeModalOpen = true;
+        }}
+        on:selectModel={(e) => handleSelectModel(e.detail.value)}
+        on:submit={handleSubmit}
+      />
+
+      <RecentSessionsList
+        loading={threads.loading}
+        {recentThreads}
+        {hasMoreThreads}
+        on:refresh={() => threads.fetch()}
+      />
+    </div>
+  </main>
 </div>
+
+<WorktreeModal
+  open={worktreeModalOpen}
+  {project}
+  on:close={() => {
+    worktreeModalOpen = false;
+  }}
+  on:confirm={(e) => handleProjectConfirm(e.detail.project)}
+/>
 
 <style>
   .home {
@@ -139,137 +201,21 @@
     --stack-gap: 0;
   }
 
-  .home-content {
+  .hero {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: calc(100vh - 3rem);
+    padding: var(--space-md);
+  }
+
+  .hero-content {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-md);
     width: 100%;
     max-width: var(--app-max-width);
-    margin: 0 auto;
-    padding: var(--space-lg) var(--space-md) var(--space-xl);
-    --stack-gap: var(--space-md);
-  }
-
-  .section {
-    --stack-gap: 0;
-    border: 1px solid var(--cli-border);
-    border-radius: var(--radius-md);
-    overflow: hidden;
-  }
-
-  .section-header {
-    --split-gap: var(--space-sm);
-    grid-template-columns: minmax(0, 1fr) auto;
-    padding: var(--space-sm) var(--space-md);
-    background: var(--cli-bg-elevated);
-    border-bottom: 1px solid var(--cli-border);
-    min-width: 0;
-  }
-
-  .section-body {
-    --stack-gap: var(--space-sm);
-    padding: var(--space-md);
-    background: var(--cli-bg);
-  }
-
-  .section-title-row {
-    --row-gap: var(--space-xs);
-    align-items: center;
-  }
-
-  .section-title {
-    color: var(--cli-text-dim);
-    font-size: var(--text-xs);
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-  }
-
-  .section-actions {
-    --row-gap: var(--space-sm);
-  }
-
-  .refresh-btn {
-    padding: var(--space-xs);
-    border: none;
-    background: transparent;
-    color: var(--cli-text-muted);
-    font-size: var(--text-base);
-    cursor: pointer;
-  }
-
-  .refresh-btn:hover {
-    color: var(--cli-text);
-  }
-
-  .recent-list {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: grid;
-    gap: var(--space-sm);
-  }
-
-  .recent-item {
-    border: 1px solid var(--cli-border);
-    border-radius: var(--radius-sm);
-    background: var(--cli-bg);
-    overflow: hidden;
-  }
-
-  .recent-row {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: stretch;
-    gap: 0;
-    min-width: 0;
-  }
-
-  .recent-link {
-    width: 100%;
-    min-width: 0;
-    text-decoration: none;
-    color: inherit;
-    padding: var(--space-sm);
-    --stack-gap: 2px;
-    overflow: hidden;
-  }
-
-  .recent-link:hover {
-    background: var(--cli-selection);
-  }
-
-  .recent-preview {
-    color: var(--cli-text);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .recent-meta {
-    color: var(--cli-text-muted);
-    font-size: var(--text-xs);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .archive-btn {
-    border: none;
-    border-left: 1px solid var(--cli-border);
-    background: transparent;
-    color: var(--cli-text-muted);
-    font-size: var(--text-base);
-    min-width: 2.2rem;
-    cursor: pointer;
-  }
-
-  .archive-btn:hover {
-    color: var(--cli-error);
-    background: var(--cli-selection);
-  }
-
-  .loading,
-  .empty,
-  .hint {
-    color: var(--cli-text-muted);
-    font-size: var(--text-xs);
   }
 
   .error {
@@ -282,14 +228,5 @@
 
   .error-icon {
     font-weight: 600;
-  }
-
-  .view-all-inline {
-    color: var(--cli-prefix-agent);
-    text-decoration: none;
-  }
-
-  .view-all-inline:hover {
-    text-decoration: underline;
   }
 </style>

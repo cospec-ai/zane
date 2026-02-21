@@ -172,3 +172,38 @@ export interface CollaborationModeMask {
   reasoning_effort?: ReasoningEffort | null;
   developer_instructions?: string | null;
 }
+
+export interface GitInspectResult {
+  isGitRepo: boolean;
+  repoRoot?: string;
+  currentBranch?: string | null;
+}
+
+export interface GitWorktree {
+  path: string;
+  branch: string | null;
+  head: string;
+  isMain: boolean;
+  locked: boolean;
+  prunable: boolean;
+}
+
+export interface GitWorktreeListResult {
+  repoRoot: string;
+  mainPath: string;
+  worktrees: GitWorktree[];
+}
+
+export interface GitWorktreeCreateParams {
+  repoRoot: string;
+  baseRef?: string;
+  branchName?: string;
+  path?: string;
+}
+
+export interface GitWorktreeCreateResult {
+  repoRoot: string;
+  path: string;
+  branch: string;
+  head: string;
+}

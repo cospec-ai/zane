@@ -32,7 +32,6 @@
 <div class="sessions stack">
   <AppHeader status={socket.status}>
     {#snippet actions()}
-      <a href="/app">Home</a>
       <a href="/settings">Settings</a>
       <button type="button" onclick={() => theme.cycle()} title="Theme: {theme.current}">
         {themeIcons[theme.current]}
