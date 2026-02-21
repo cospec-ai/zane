@@ -1,4 +1,11 @@
-import type { ConnectionStatus, RpcMessage } from "./types";
+import type {
+  ConnectionStatus,
+  GitInspectResult,
+  GitWorktreeCreateParams,
+  GitWorktreeCreateResult,
+  GitWorktreeListResult,
+  RpcMessage,
+} from "./types";
 const HEARTBEAT_INTERVAL = 30_000;
 const HEARTBEAT_TIMEOUT = 10_000;
 const RECONNECT_DELAY = 2_000;
@@ -27,6 +34,14 @@ export interface ListDirsResult {
   dirs: string[];
   parent: string;
   current: string;
+}
+
+export interface GitWorktreeRemoveResult {
+  removed: boolean;
+}
+
+export interface GitWorktreePruneResult {
+  prunedCount: number;
 }
 
 class SocketStore {
@@ -219,6 +234,89 @@ class SocketStore {
         reject,
       });
       const result = this.send({ id, method: "anchor.listDirs", params: { path: path ?? "" } });
+      if (!result.success) {
+        this.#pendingRpc.delete(id);
+        reject(new Error(result.error ?? "Not connected"));
+      }
+    });
+  }
+
+  gitInspect(path: string): Promise<GitInspectResult> {
+    const id = `git-inspect-${++this.#rpcIdCounter}`;
+    return new Promise((resolve, reject) => {
+      this.#pendingRpc.set(id, {
+        resolve: (v) => resolve(v as GitInspectResult),
+        reject,
+      });
+      const result = this.send({ id, method: "anchor.git.inspect", params: { path } });
+      if (!result.success) {
+        this.#pendingRpc.delete(id);
+        reject(new Error(result.error ?? "Not connected"));
+      }
+    });
+  }
+
+  gitWorktreeList(repoRoot: string): Promise<GitWorktreeListResult> {
+    const id = `git-worktree-list-${++this.#rpcIdCounter}`;
+    return new Promise((resolve, reject) => {
+      this.#pendingRpc.set(id, {
+        resolve: (v) => resolve(v as GitWorktreeListResult),
+        reject,
+      });
+      const result = this.send({ id, method: "anchor.git.worktree.list", params: { repoRoot } });
+      if (!result.success) {
+        this.#pendingRpc.delete(id);
+        reject(new Error(result.error ?? "Not connected"));
+      }
+    });
+  }
+
+  gitWorktreeCreate(params: GitWorktreeCreateParams): Promise<GitWorktreeCreateResult> {
+    const id = `git-worktree-create-${++this.#rpcIdCounter}`;
+    return new Promise((resolve, reject) => {
+      this.#pendingRpc.set(id, {
+        resolve: (v) => resolve(v as GitWorktreeCreateResult),
+        reject,
+      });
+      const result = this.send({
+        id,
+        method: "anchor.git.worktree.create",
+        params: params as unknown as Record<string, unknown>,
+      });
+      if (!result.success) {
+        this.#pendingRpc.delete(id);
+        reject(new Error(result.error ?? "Not connected"));
+      }
+    });
+  }
+
+  gitWorktreeRemove(repoRoot: string, path: string, force = false): Promise<GitWorktreeRemoveResult> {
+    const id = `git-worktree-remove-${++this.#rpcIdCounter}`;
+    return new Promise((resolve, reject) => {
+      this.#pendingRpc.set(id, {
+        resolve: (v) => resolve(v as GitWorktreeRemoveResult),
+        reject,
+      });
+      const result = this.send({
+        id,
+        method: "anchor.git.worktree.remove",
+        params: { repoRoot, path, force },
+      });
+      if (!result.success) {
+        this.#pendingRpc.delete(id);
+        reject(new Error(result.error ?? "Not connected"));
+      }
+    });
+  }
+
+  gitWorktreePrune(repoRoot: string): Promise<GitWorktreePruneResult> {
+    const id = `git-worktree-prune-${++this.#rpcIdCounter}`;
+    return new Promise((resolve, reject) => {
+      this.#pendingRpc.set(id, {
+        resolve: (v) => resolve(v as GitWorktreePruneResult),
+        reject,
+      });
+      const result = this.send({ id, method: "anchor.git.worktree.prune", params: { repoRoot } });
       if (!result.success) {
         this.#pendingRpc.delete(id);
         reject(new Error(result.error ?? "Not connected"));

@@ -14,6 +14,18 @@ via Anchor/Orbit. The wire format is JSON-RPC 2.0-like over WebSocket.
 | `thread/resume` | `{ threadId }` | Rehydrate a thread (returns turns + items) |
 | `thread/archive` | `{ threadId }` | Soft-delete |
 
+### Anchor Local Git Helpers
+
+These methods are handled by Anchor directly and do not go through `codex app-server`.
+
+| Method | Params | Notes |
+|---|---|---|
+| `anchor.git.inspect` | `{ path }` | Returns `{ isGitRepo, repoRoot?, currentBranch? }` for a path. |
+| `anchor.git.worktree.list` | `{ repoRoot }` | Returns `{ repoRoot, mainPath, worktrees[] }`. |
+| `anchor.git.worktree.create` | `{ repoRoot, baseRef?, branchName?, path? }` | Creates a worktree, optionally auto-generating branch/path. |
+| `anchor.git.worktree.remove` | `{ repoRoot, path, force? }` | Removes a worktree (`force` uses `--force`). |
+| `anchor.git.worktree.prune` | `{ repoRoot }` | Runs `git worktree prune`; returns `{ prunedCount }`. |
+
 ### Turn Control
 
 | Method | Params | Notes |

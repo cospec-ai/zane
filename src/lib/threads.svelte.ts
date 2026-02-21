@@ -26,6 +26,7 @@ class ThreadsStore {
   #pendingStartModel: string | null = null;
   #pendingCollaborationMode: CollaborationMode | null = null;
   #pendingStartCallback: ((threadId: string) => void) | null = null;
+  #pendingStartErrorCallback: ((error: Error) => void) | null = null;
   #suppressNextNavigation = false;
   #collaborationPresets: CollaborationModeMask[] = [];
 
@@ -61,7 +62,7 @@ class ThreadsStore {
     socket.send({
       method: "thread/list",
       id,
-      params: { cursor: null, limit: 50 },
+      params: { cursor: null, limit: 25 },
     });
   }
 
@@ -87,6 +88,7 @@ class ThreadsStore {
       sandbox?: SandboxMode | string;
       suppressNavigation?: boolean;
       onThreadStarted?: (threadId: string) => void;
+      onThreadStartFailed?: (error: Error) => void;
       collaborationMode?: CollaborationMode;
     }
   ) {
@@ -152,7 +154,7 @@ class ThreadsStore {
       return;
     }
 
-    if (msg.id && this.#pendingRequests.has(msg.id as number)) {
+    if (msg.id != null && this.#pendingRequests.has(msg.id as number)) {
       const type = this.#pendingRequests.get(msg.id as number);
       this.#pendingRequests.delete(msg.id as number);
 
@@ -169,6 +171,10 @@ class ThreadsStore {
       if (type === "collaborationPresets" && msg.result) {
         const result = msg.result as { data: CollaborationModeMask[] };
         this.#collaborationPresets = result.data || [];
+      }
+
+      if (type === "start" && msg.error) {
+        this.#handleStartFailure(msg.error);
       }
 
       if (type === "start" && msg.result) {
@@ -209,6 +215,7 @@ class ThreadsStore {
       this.#pendingStartCallback(thread.id);
       this.#pendingStartCallback = null;
     }
+    this.#pendingStartErrorCallback = null;
     if (!this.#suppressNextNavigation) {
       navigate("/thread/:id", { params: { id: thread.id } });
     }
@@ -261,6 +268,7 @@ class ThreadsStore {
       sandbox?: SandboxMode | string;
       suppressNavigation?: boolean;
       onThreadStarted?: (threadId: string) => void;
+      onThreadStartFailed?: (error: Error) => void;
       collaborationMode?: CollaborationMode;
     }
   ) {
@@ -271,8 +279,9 @@ class ThreadsStore {
     this.#pendingStartModel = requestedModel;
     this.#pendingCollaborationMode = options?.collaborationMode ?? null;
     this.#pendingStartCallback = options?.onThreadStarted ?? null;
+    this.#pendingStartErrorCallback = options?.onThreadStartFailed ?? null;
     this.#suppressNextNavigation = options?.suppressNavigation ?? false;
-    socket.send({
+    const sendResult = socket.send({
       method: "thread/start",
       id,
       params: {
@@ -282,12 +291,41 @@ class ThreadsStore {
         ...(options?.sandbox ? { sandbox: options.sandbox } : {}),
       },
     });
+    if (!sendResult.success) {
+      this.#pendingRequests.delete(id);
+      const message = sendResult.error ?? "Failed to start thread";
+      this.#handleStartFailure({ message });
+      throw new Error(message);
+    }
   }
 
   #resolveStartModel(collaborationMode?: CollaborationMode): string | null {
     const collabModel = collaborationMode?.settings?.model?.trim();
     if (collabModel) return collabModel;
     return models.defaultModel?.value ?? null;
+  }
+
+  #handleStartFailure(error: unknown) {
+    const message = this.#getErrorMessage(error);
+    if (this.#pendingStartErrorCallback) {
+      this.#pendingStartErrorCallback(new Error(message));
+    }
+    this.#pendingStartCallback = null;
+    this.#pendingStartErrorCallback = null;
+    this.#pendingStartInput = null;
+    this.#pendingStartModel = null;
+    this.#pendingCollaborationMode = null;
+    this.#suppressNextNavigation = false;
+  }
+
+  #getErrorMessage(error: unknown): string {
+    if (error instanceof Error && error.message.trim()) return error.message;
+    if (typeof error === "string" && error.trim()) return error;
+    if (error && typeof error === "object") {
+      const message = (error as { message?: unknown }).message;
+      if (typeof message === "string" && message.trim()) return message;
+    }
+    return "Failed to start thread";
   }
 
   #loadSettings() {
