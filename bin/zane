@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0" 2>/dev/null || realpath "$0" 2>/dev/null || echo "$0")")" && pwd)"
 ZANE_HOME="${ZANE_HOME:-$(dirname "$SCRIPT_DIR")}"
 ANCHOR_DIR="$ZANE_HOME/services/anchor"
 ENV_FILE="$ZANE_HOME/.env"

@@ -53,8 +53,11 @@ At the end, it prints your deployment URLs and next steps.
 After running `zane update` to pull the latest code, redeploy the services:
 
 ```bash
-cd ~/.zane/services/orbit && bunx wrangler deploy
-cd ~/.zane && bun run build && bunx wrangler pages deploy dist --project-name zane
+# Redeploy orbit worker
+(cd ~/.zane/services/orbit && wrangler deploy)
+
+# Rebuild and redeploy web frontend
+(cd ~/.zane && bun run build && wrangler pages deploy dist --project-name zane)
 ```
 
 ## Architecture

@@ -29,7 +29,7 @@ abort() {
 confirm() {
   local prompt="$1"
   printf "%s [Y/n] " "$prompt"
-  read -r answer
+  read -r answer < /dev/tty
   [[ -z "$answer" || "$answer" =~ ^[Yy] ]]
 }
 
@@ -114,7 +114,7 @@ fi
 # ── Check codex authentication ──────────────────
 echo ""
 echo "  Checking codex authentication..."
-if codex login status &>/dev/null 2>&1; then
+if codex login status &>/dev/null; then
   pass "codex authenticated"
 else
   warn "codex is not authenticated"
@@ -123,7 +123,7 @@ else
   echo ""
   if confirm "  Run 'codex login' now?"; then
     codex login
-    if codex login status &>/dev/null 2>&1; then
+    if codex login status &>/dev/null; then
       pass "codex authenticated"
     else
       warn "codex authentication may have failed. You can try again later."
@@ -136,6 +136,7 @@ step "Installing Zane to $ZANE_HOME..."
 
 if [[ -d "$ZANE_HOME/.git" ]]; then
   echo "  Existing installation found. Updating..."
+  git -C "$ZANE_HOME" reset --hard --quiet
   git -C "$ZANE_HOME" pull --rebase --quiet
   pass "Updated to latest"
 else
@@ -156,40 +157,21 @@ echo "  Installing anchor dependencies..."
 (cd "$ZANE_HOME/services/anchor" && bun install --silent)
 pass "Anchor dependencies installed"
 
-# ── Mode selection ──────────────────────────────
-step "Setup mode"
-echo ""
-echo "  How do you want to run Zane?"
-echo ""
-printf "  ${DIM}1) Hosted (coming soon)${RESET}\n"
-printf "  ${DIM}   Run the anchor locally, connect to cloud services.${RESET}\n"
-echo ""
-printf "  ${BOLD}2)${RESET} Self-host\n"
-echo "     Deploy everything to your own Cloudflare account."
-echo ""
-printf "  Choose [2]: "
-read -r mode_choice
-
-if [[ "${mode_choice:-2}" == "1" ]]; then
-  warn "Hosted mode is not available yet. Falling back to self-host."
-  mode_choice="2"
-fi
-
 # ── Self-host setup ────────────────────────────
-if [[ "${mode_choice:-2}" == "2" ]]; then
-  step "Self-host setup"
+step "Self-host setup"
+printf "  ${DIM}Deploying to your Cloudflare account...${RESET}\n"
 
-  local_wizard="$ZANE_HOME/bin/self-host.sh"
-  if [[ -f "$local_wizard" ]]; then
-    # shellcheck source=/dev/null
-    source "$local_wizard"
-  else
-    echo ""
-    echo "  The self-host wizard will guide you through deploying"
-    echo "  Auth, Orbit, and the Web frontend to your Cloudflare account."
-    echo ""
+local_wizard="$ZANE_HOME/bin/self-host.sh"
+if [[ -f "$local_wizard" ]]; then
+  # shellcheck source=/dev/null
+  source "$local_wizard"
+else
+  echo ""
+  echo "  The self-host wizard will guide you through deploying"
+  echo "  Orbit and the Web frontend to your Cloudflare account."
+  echo ""
 
-    cat > "$ZANE_HOME/.env" <<ENVEOF
+  cat > "$ZANE_HOME/.env" <<ENVEOF
 # Zane Anchor Configuration (self-host)
 # Run 'zane self-host' to complete setup.
 ANCHOR_PORT=8788
@@ -199,10 +181,7 @@ ANCHOR_JWT_TTL_SEC=300
 ANCHOR_APP_CWD=
 ENVEOF
 
-    warn "Self-host wizard not yet available."
-    echo "  A basic .env has been created. Run 'zane self-host' after installation"
-    echo "  to complete the Cloudflare deployment."
-  fi
+  warn "Self-host wizard not found. Run 'zane self-host' after installation."
 fi
 
 # ── Install CLI ─────────────────────────────────
@@ -219,12 +198,12 @@ chmod +x "$cli_src"
 pass "CLI installed at $ZANE_HOME/bin/zane"
 
 # Add to PATH
-path_line='export PATH="$HOME/.zane/bin:$PATH"'
+path_line="export PATH=\"$ZANE_HOME/bin:\$PATH\""
 added_to=""
 
 for rc in "$HOME/.zshrc" "$HOME/.bashrc"; do
   if [[ -f "$rc" ]]; then
-    if ! grep -q '.zane/bin' "$rc"; then
+    if ! grep -q 'zane/bin' "$rc"; then
       echo "" >> "$rc"
       echo "# Zane" >> "$rc"
       echo "$path_line" >> "$rc"
