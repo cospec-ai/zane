@@ -5,30 +5,7 @@
 
   const themeIcons = { system: "◐", light: "○", dark: "●" } as const;
 
-  let showAuthModal = $state(false);
-  let authMode = $state<"login" | "register">("login");
-  let username = $state("");
-  let newUsername = $state("");
-
-  const needsSetup = $derived(auth.status === "needs_setup");
   const isSignedIn = $derived(auth.status === "signed_in");
-
-  $effect(() => {
-    if (needsSetup) {
-      authMode = "register";
-      showAuthModal = true;
-    }
-  });
-
-  function openModal(mode: "login" | "register") {
-    authMode = mode;
-    auth.error = null;
-    showAuthModal = true;
-  }
-
-  function closeModal() {
-    showAuthModal = false;
-  }
 </script>
 
 <svelte:head>
@@ -44,6 +21,8 @@
       {/if}
       {#if isSignedIn}
         <a class="primary-btn" href="/app">Go to app</a>
+      {:else}
+        <a class="primary-btn" href="/login">Sign in</a>
       {/if}
       <button type="button" class="icon-btn" onclick={() => theme.cycle()} title="Theme: {theme.current}">
         <span class="icon-glyph">{themeIcons[theme.current]}</span>
@@ -59,8 +38,8 @@
       </p>
       {#if !isSignedIn}
         <div class="hero-actions row">
-          <button class="primary-btn" type="button" onclick={() => openModal("login")}>Sign in</button>
-          <button class="ghost-btn" type="button" onclick={() => openModal("register")}>Create account</button>
+          <a class="primary-btn" href="/login">Sign in</a>
+          <a class="ghost-btn" href="/register">Create account</a>
         </div>
       {/if}
     </div>
@@ -84,80 +63,6 @@
   <footer class="landing-footer">
     <a class="footer-link" href="https://github.com/cospec-ai/zane" target="_blank" rel="noopener">GitHub</a>
   </footer>
-
-  {#if showAuthModal}
-    <!-- svelte-ignore a11y_no_static_element_interactions a11y_click_events_have_key_events -->
-    <div class="modal-overlay" role="presentation" onclick={closeModal}></div>
-    <div class="auth-modal" role="dialog" aria-modal="true">
-      <div class="modal-header">
-        <span>{authMode === "login" ? "Sign in" : "Create account"}</span>
-        <button class="modal-close" type="button" onclick={closeModal}>×</button>
-      </div>
-      <div class="modal-body stack">
-        {#if auth.error}
-          <div class="auth-error">{auth.error}</div>
-        {/if}
-
-        {#if authMode === "login"}
-          <input
-            type="text"
-            class="auth-input"
-            placeholder="Username"
-            bind:value={username}
-            onkeydown={(e) => {
-              if (e.key === "Enter" && username.trim()) auth.signIn(username.trim());
-            }}
-          />
-          <button
-            class="primary-btn"
-            type="button"
-            onclick={() => auth.signIn(username.trim())}
-            disabled={auth.busy || !username.trim()}
-          >
-            {auth.busy ? "Working..." : "Sign in with passkey"}
-          </button>
-          <button
-            class="link-btn"
-            type="button"
-            onclick={() => {
-              authMode = "register";
-              auth.error = null;
-            }}
-          >
-            Create new account
-          </button>
-        {:else}
-          <input
-            type="text"
-            class="auth-input"
-            placeholder="Username"
-            bind:value={newUsername}
-            onkeydown={(e) => {
-              if (e.key === "Enter" && newUsername.trim()) auth.register(newUsername.trim());
-            }}
-          />
-          <button
-            class="primary-btn"
-            type="button"
-            onclick={() => auth.register(newUsername.trim())}
-            disabled={auth.busy || !newUsername.trim()}
-          >
-            {auth.busy ? "Working..." : "Create passkey"}
-          </button>
-          <button
-            class="link-btn"
-            type="button"
-            onclick={() => {
-              authMode = "login";
-              auth.error = null;
-            }}
-          >
-            Back to sign in
-          </button>
-        {/if}
-      </div>
-    </div>
-  {/if}
 </div>
 
 <style>
@@ -242,98 +147,19 @@
     font-size: var(--text-sm);
     line-height: 1;
     cursor: pointer;
+    text-decoration: none;
   }
 
   .primary-btn {
     border: 1px solid var(--cli-border);
     background: var(--color-btn-primary-bg, var(--cli-prefix-agent));
     color: var(--color-btn-primary-text, var(--cli-bg));
-    text-decoration: none;
   }
 
   .ghost-btn {
     background: transparent;
     border: 1px solid var(--cli-border);
     color: var(--cli-text-dim);
-  }
-
-  .modal-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(5, 7, 10, 0.6);
-    z-index: 40;
-  }
-
-  .auth-modal {
-    position: fixed;
-    top: 18vh;
-    left: 50%;
-    transform: translateX(-50%);
-    width: min(420px, calc(100vw - 2rem));
-    background: var(--cli-bg-elevated);
-    border: 1px solid var(--cli-border);
-    border-radius: var(--radius-md);
-    z-index: 50;
-    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.35);
-  }
-
-  .modal-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: var(--space-sm) var(--space-md);
-    border-bottom: 1px solid var(--cli-border);
-    font-size: var(--text-xs);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--cli-text-muted);
-  }
-
-  .modal-close {
-    background: transparent;
-    border: none;
-    color: var(--cli-text-muted);
-    font-size: var(--text-lg);
-    cursor: pointer;
-  }
-
-  .modal-body {
-    padding: var(--space-md);
-    --stack-gap: var(--space-md);
-  }
-
-  .auth-input {
-    padding: var(--space-sm) var(--space-md);
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--cli-border);
-    background: var(--cli-bg);
-    color: var(--cli-text);
-    font-family: var(--font-mono);
-    outline: none;
-  }
-
-  .auth-error {
-    padding: var(--space-sm);
-    border-radius: var(--radius-sm);
-    background: var(--cli-error-bg);
-    color: var(--cli-error);
-    font-size: var(--text-sm);
-  }
-
-  .link-btn {
-    align-self: flex-start;
-    padding: 0;
-    border: none;
-    background: none;
-    color: var(--cli-text-dim);
-    font-family: var(--font-mono);
-    font-size: var(--text-sm);
-    cursor: pointer;
-    text-decoration: underline;
-  }
-
-  .link-btn:hover {
-    color: var(--cli-text);
   }
 
   .primary-btn:hover {
@@ -344,11 +170,6 @@
     background: var(--cli-selection);
     color: var(--cli-text);
     border-color: var(--cli-text-muted);
-  }
-
-  .primary-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
   }
 
   /* Features */
@@ -406,5 +227,4 @@
   .footer-link:hover {
     color: var(--cli-text-dim);
   }
-
 </style>
