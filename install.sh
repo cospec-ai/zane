@@ -28,9 +28,59 @@ abort() {
 
 confirm() {
   local prompt="$1"
+  [[ -r /dev/tty ]] || abort "Interactive setup requires a TTY."
   printf "%s [Y/n] " "$prompt"
-  read -r answer
+  read -r answer < /dev/tty
   [[ -z "$answer" || "$answer" =~ ^[Yy] ]]
+}
+
+retry() {
+  local attempts="$1" delay="$2" desc="$3"
+  shift 3
+  local i
+  for ((i = 1; i <= attempts; i++)); do
+    if "$@"; then
+      return 0
+    fi
+    if ((i < attempts)); then
+      warn "$desc failed (attempt $i/$attempts) — retrying in ${delay}s..."
+      sleep "$delay"
+    fi
+  done
+  return 1
+}
+
+resolve_origin_branch() {
+  local repo="$1"
+  local remote_head
+  remote_head=$(git -C "$repo" symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null || true)
+  if [[ -n "$remote_head" ]]; then
+    printf "%s" "${remote_head#origin/}"
+    return
+  fi
+  printf "main"
+}
+
+ensure_env_file() {
+  if [[ -f "$ZANE_HOME/.env" ]]; then
+    return 0
+  fi
+  if [[ -f "$ZANE_HOME/.env.example" ]]; then
+    cp "$ZANE_HOME/.env.example" "$ZANE_HOME/.env"
+    pass "Created .env from .env.example"
+    return 0
+  fi
+
+  cat > "$ZANE_HOME/.env" <<ENVEOF
+# Zane Anchor Configuration (self-host)
+# Run 'zane self-host' to complete setup.
+ANCHOR_PORT=8788
+ANCHOR_ORBIT_URL=
+AUTH_URL=
+ANCHOR_JWT_TTL_SEC=300
+ANCHOR_APP_CWD=
+ENVEOF
+  warn ".env.example not found; created a minimal .env file."
 }
 
 # ── Cleanup on failure ──────────────────────────
@@ -114,7 +164,7 @@ fi
 # ── Check codex authentication ──────────────────
 echo ""
 echo "  Checking codex authentication..."
-if codex login status &>/dev/null 2>&1; then
+if codex login status &>/dev/null; then
   pass "codex authenticated"
 else
   warn "codex is not authenticated"
@@ -123,7 +173,7 @@ else
   echo ""
   if confirm "  Run 'codex login' now?"; then
     codex login
-    if codex login status &>/dev/null 2>&1; then
+    if codex login status &>/dev/null; then
       pass "codex authenticated"
     else
       warn "codex authentication may have failed. You can try again later."
@@ -136,74 +186,48 @@ step "Installing Zane to $ZANE_HOME..."
 
 if [[ -d "$ZANE_HOME/.git" ]]; then
   echo "  Existing installation found. Updating..."
-  git -C "$ZANE_HOME" pull --rebase --quiet
-  pass "Updated to latest"
+  if [[ -n "$(git -C "$ZANE_HOME" status --porcelain)" ]]; then
+    warn "Local changes detected and will be overwritten."
+  fi
+  warn "Resetting local checkout to the remote branch state."
+
+  retry 3 3 "git fetch" git -C "$ZANE_HOME" fetch --prune origin \
+    || abort "Failed to fetch updates from origin."
+
+  target_branch="$ZANE_BRANCH"
+  if [[ -z "$target_branch" ]]; then
+    target_branch=$(resolve_origin_branch "$ZANE_HOME")
+  fi
+
+  if ! git -C "$ZANE_HOME" show-ref --verify --quiet "refs/remotes/origin/$target_branch"; then
+    abort "Remote branch origin/$target_branch not found."
+  fi
+
+  before=$(git -C "$ZANE_HOME" rev-parse --short HEAD 2>/dev/null || echo "unknown")
+  git -C "$ZANE_HOME" reset --hard --quiet "origin/$target_branch"
+  git -C "$ZANE_HOME" clean -fd --quiet
+  after=$(git -C "$ZANE_HOME" rev-parse --short HEAD 2>/dev/null || echo "unknown")
+  pass "Updated $before -> $after (origin/$target_branch)"
 else
   if [[ -d "$ZANE_HOME" ]]; then
     warn "$ZANE_HOME exists but is not a git repo. Backing up..."
     mv "$ZANE_HOME" "$ZANE_HOME.bak.$(date +%s)"
   fi
   if [[ -n "$ZANE_BRANCH" ]]; then
-    git clone --depth 1 --branch "$ZANE_BRANCH" "$ZANE_REPO" "$ZANE_HOME"
+    retry 3 3 "git clone" git clone --depth 1 --branch "$ZANE_BRANCH" "$ZANE_REPO" "$ZANE_HOME" \
+      || abort "Failed to clone $ZANE_REPO ($ZANE_BRANCH)."
   else
-    git clone --depth 1 "$ZANE_REPO" "$ZANE_HOME"
+    retry 3 3 "git clone" git clone --depth 1 "$ZANE_REPO" "$ZANE_HOME" \
+      || abort "Failed to clone $ZANE_REPO."
   fi
   pass "Cloned repository"
 fi
 
 # ── Install anchor dependencies ─────────────────
 echo "  Installing anchor dependencies..."
-(cd "$ZANE_HOME/services/anchor" && bun install --silent)
+retry 3 3 "Anchor dependency install" bash -c 'cd "$1/services/anchor" && bun install --silent' _ "$ZANE_HOME" \
+  || abort "Failed to install Anchor dependencies."
 pass "Anchor dependencies installed"
-
-# ── Mode selection ──────────────────────────────
-step "Setup mode"
-echo ""
-echo "  How do you want to run Zane?"
-echo ""
-printf "  ${DIM}1) Hosted (coming soon)${RESET}\n"
-printf "  ${DIM}   Run the anchor locally, connect to cloud services.${RESET}\n"
-echo ""
-printf "  ${BOLD}2)${RESET} Self-host\n"
-echo "     Deploy everything to your own Cloudflare account."
-echo ""
-printf "  Choose [2]: "
-read -r mode_choice
-
-if [[ "${mode_choice:-2}" == "1" ]]; then
-  warn "Hosted mode is not available yet. Falling back to self-host."
-  mode_choice="2"
-fi
-
-# ── Self-host setup ────────────────────────────
-if [[ "${mode_choice:-2}" == "2" ]]; then
-  step "Self-host setup"
-
-  local_wizard="$ZANE_HOME/bin/self-host.sh"
-  if [[ -f "$local_wizard" ]]; then
-    # shellcheck source=/dev/null
-    source "$local_wizard"
-  else
-    echo ""
-    echo "  The self-host wizard will guide you through deploying"
-    echo "  Auth, Orbit, and the Web frontend to your Cloudflare account."
-    echo ""
-
-    cat > "$ZANE_HOME/.env" <<ENVEOF
-# Zane Anchor Configuration (self-host)
-# Run 'zane self-host' to complete setup.
-ANCHOR_PORT=8788
-ANCHOR_ORBIT_URL=
-AUTH_URL=
-ANCHOR_JWT_TTL_SEC=300
-ANCHOR_APP_CWD=
-ENVEOF
-
-    warn "Self-host wizard not yet available."
-    echo "  A basic .env has been created. Run 'zane self-host' after installation"
-    echo "  to complete the Cloudflare deployment."
-  fi
-fi
 
 # ── Install CLI ─────────────────────────────────
 step "Installing CLI..."
@@ -219,12 +243,12 @@ chmod +x "$cli_src"
 pass "CLI installed at $ZANE_HOME/bin/zane"
 
 # Add to PATH
-path_line='export PATH="$HOME/.zane/bin:$PATH"'
+path_line="export PATH=\"$ZANE_HOME/bin:\$PATH\""
 added_to=""
 
 for rc in "$HOME/.zshrc" "$HOME/.bashrc"; do
   if [[ -f "$rc" ]]; then
-    if ! grep -q '.zane/bin' "$rc"; then
+    if ! grep -q 'zane/bin' "$rc"; then
       echo "" >> "$rc"
       echo "# Zane" >> "$rc"
       echo "$path_line" >> "$rc"
@@ -245,6 +269,22 @@ fi
 export PATH="$ZANE_HOME/bin:$PATH"
 
 pass "Added to PATH in$added_to"
+
+# ── Self-host setup ────────────────────────────
+step "Self-host setup"
+local_wizard="$ZANE_HOME/bin/self-host.sh"
+if [[ ! -f "$local_wizard" ]]; then
+  warn "Self-host wizard not found at $local_wizard"
+  ensure_env_file
+  warn "Run 'zane self-host' after installation."
+elif confirm "  Run self-host deployment now?"; then
+  printf "  ${DIM}Deploying to your Cloudflare account...${RESET}\n"
+  # shellcheck source=/dev/null
+  source "$local_wizard"
+else
+  ensure_env_file
+  echo "  Skipped cloud deployment. Run 'zane self-host' when you're ready."
+fi
 
 # ── Done ────────────────────────────────────────
 echo ""

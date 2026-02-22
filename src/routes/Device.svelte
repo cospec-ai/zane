@@ -33,6 +33,7 @@
       }
 
       success = true;
+      setTimeout(() => { window.location.href = "/"; }, 1500);
     } catch {
       error = "Could not reach Orbit.";
     } finally {

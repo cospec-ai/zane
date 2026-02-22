@@ -5,6 +5,8 @@ export type Theme = "system" | "light" | "dark";
 
 class ThemeStore {
   #theme = $state<Theme>("system");
+  #mediaQuery: MediaQueryList | null = null;
+  #mediaListener: ((event: MediaQueryListEvent) => void) | null = null;
 
   constructor() {
     // Load from localStorage on init
@@ -35,15 +37,42 @@ class ThemeStore {
   }
 
   #applyTheme() {
-    if (typeof document === "undefined") return;
+    if (typeof document === "undefined" || typeof window === "undefined") return;
 
     const root = document.documentElement;
+    root.setAttribute("data-theme-mode", this.#theme);
 
     if (this.#theme === "system") {
-      root.removeAttribute("data-theme");
+      const mediaQuery = this.#getMediaQuery();
+      root.setAttribute("data-theme", mediaQuery.matches ? "dark" : "light");
+      this.#attachSystemListener();
     } else {
+      this.#detachSystemListener();
       root.setAttribute("data-theme", this.#theme);
     }
+  }
+
+  #getMediaQuery(): MediaQueryList {
+    if (!this.#mediaQuery) {
+      this.#mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    }
+    return this.#mediaQuery;
+  }
+
+  #attachSystemListener() {
+    if (this.#mediaListener) return;
+    const mediaQuery = this.#getMediaQuery();
+    this.#mediaListener = (event) => {
+      if (this.#theme !== "system") return;
+      document.documentElement.setAttribute("data-theme", event.matches ? "dark" : "light");
+    };
+    mediaQuery.addEventListener("change", this.#mediaListener);
+  }
+
+  #detachSystemListener() {
+    if (!this.#mediaQuery || !this.#mediaListener) return;
+    this.#mediaQuery.removeEventListener("change", this.#mediaListener);
+    this.#mediaListener = null;
   }
 }
 

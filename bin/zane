@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0" 2>/dev/null || realpath "$0" 2>/dev/null || echo "$0")")" && pwd)"
 ZANE_HOME="${ZANE_HOME:-$(dirname "$SCRIPT_DIR")}"
 ANCHOR_DIR="$ZANE_HOME/services/anchor"
 ENV_FILE="$ZANE_HOME/.env"
@@ -19,6 +19,41 @@ pass() { printf "  ${GREEN}✓${RESET} %s\n" "$1"; }
 fail() { printf "  ${RED}✗${RESET} %s\n" "$1"; }
 warn() { printf "  ${YELLOW}⚠${RESET} %s\n" "$1"; }
 info() { printf "  %s\n" "$1"; }
+
+wrangler_tty() {
+  if [[ -r /dev/tty ]]; then
+    wrangler "$@" < /dev/tty
+  else
+    wrangler "$@"
+  fi
+}
+
+retry_cmd() {
+  local attempts="$1" delay="$2" desc="$3"
+  shift 3
+  local i
+  for ((i = 1; i <= attempts; i++)); do
+    if "$@"; then
+      return 0
+    fi
+    if ((i < attempts)); then
+      warn "$desc failed (attempt $i/$attempts) — retrying in ${delay}s..."
+      sleep "$delay"
+    fi
+  done
+  return 1
+}
+
+resolve_origin_branch() {
+  local repo="$1"
+  local remote_head
+  remote_head=$(git -C "$repo" symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null || true)
+  if [[ -n "$remote_head" ]]; then
+    printf "%s" "${remote_head#origin/}"
+    return
+  fi
+  printf "main"
+}
 
 # ── Commands ────────────────────────────────────
 
@@ -178,22 +213,84 @@ cmd_update() {
     exit 1
   fi
 
-  local before
+  local before after target_branch
   before=$(git -C "$ZANE_HOME" rev-parse --short HEAD 2>/dev/null || echo "unknown")
 
-  git -C "$ZANE_HOME" pull --rebase --quiet
+  if [[ -n "$(git -C "$ZANE_HOME" status --porcelain)" ]]; then
+    warn "Local changes detected and will be overwritten."
+  fi
 
-  local after
+  retry_cmd 3 3 "git fetch" git -C "$ZANE_HOME" fetch --prune origin \
+    || { echo "Error: Failed to fetch updates from origin."; exit 1; }
+
+  target_branch=$(resolve_origin_branch "$ZANE_HOME")
+  if ! git -C "$ZANE_HOME" show-ref --verify --quiet "refs/remotes/origin/$target_branch"; then
+    echo "Error: Remote branch origin/$target_branch not found."
+    exit 1
+  fi
+
+  git -C "$ZANE_HOME" reset --hard --quiet "origin/$target_branch"
+  git -C "$ZANE_HOME" clean -fd --quiet
+
   after=$(git -C "$ZANE_HOME" rev-parse --short HEAD 2>/dev/null || echo "unknown")
 
   if [[ "$before" == "$after" ]]; then
-    echo "Already up to date ($after)."
+    echo "Already up to date ($after on origin/$target_branch)."
   else
-    echo "Updated $before -> $after"
+    echo "Updated $before -> $after (origin/$target_branch)"
+  fi
+
+  # Re-apply D1 database ID to wrangler.toml files after reset
+  if [[ -f "$ENV_FILE" ]]; then
+    local db_id
+    db_id=$(grep -E '^D1_DATABASE_ID=' "$ENV_FILE" 2>/dev/null | cut -d= -f2- || true)
+    if [[ -n "$db_id" ]]; then
+      for toml_path in "$ZANE_HOME/wrangler.toml" "$ZANE_HOME/services/orbit/wrangler.toml"; do
+        if [[ -f "$toml_path" ]]; then
+          sed -i '' "s/database_id = \"[^\"]*\"/database_id = \"$db_id\"/" "$toml_path"
+        fi
+      done
+    fi
   fi
 
   echo "Installing dependencies..."
-  (cd "$ANCHOR_DIR" && bun install --silent)
+  retry_cmd 3 3 "Anchor dependency install" bash -c 'cd "$1" && bun install --silent' _ "$ANCHOR_DIR" \
+    || { echo "Error: Failed to install Anchor dependencies."; exit 1; }
+
+  # Redeploy web and orbit if self-hosted
+  if [[ -f "$ENV_FILE" ]]; then
+    local auth_url
+    local vapid_public_key
+    auth_url=$(grep -E '^AUTH_URL=' "$ENV_FILE" 2>/dev/null | cut -d= -f2- || true)
+    vapid_public_key=$(grep -E '^VAPID_PUBLIC_KEY=' "$ENV_FILE" 2>/dev/null | cut -d= -f2- || true)
+    if [[ -n "$auth_url" ]]; then
+      if ! command -v wrangler &>/dev/null; then
+        echo "Error: wrangler not found. Install with: bun add -g wrangler"
+        exit 1
+      fi
+      if [[ -z "$vapid_public_key" ]]; then
+        echo "Error: VAPID_PUBLIC_KEY is missing in $ENV_FILE."
+        echo "Run 'zane self-host' to regenerate and persist push settings."
+        exit 1
+      fi
+
+      echo "Rebuilding web..."
+      retry_cmd 3 3 "Web dependency install" bash -c 'cd "$1" && bun install --silent' _ "$ZANE_HOME" \
+        || { echo "Error: Failed to install web dependencies."; exit 1; }
+      (cd "$ZANE_HOME" && AUTH_URL="$auth_url" VAPID_PUBLIC_KEY="$vapid_public_key" bun run build) \
+        || { echo "Error: Web build failed."; exit 1; }
+
+      echo "Deploying web..."
+      (cd /tmp && CI=true wrangler_tty pages deploy "$ZANE_HOME/dist" --project-name zane --commit-dirty=true) \
+        || { echo "Error: Pages deploy failed."; exit 1; }
+
+      echo "Deploying orbit..."
+      retry_cmd 3 3 "Orbit dependency install" bash -c 'cd "$1" && bun install --silent' _ "$ZANE_HOME/services/orbit" \
+        || { echo "Error: Failed to install Orbit dependencies."; exit 1; }
+      (cd "$ZANE_HOME/services/orbit" && wrangler_tty deploy) \
+        || { echo "Error: Orbit deploy failed."; exit 1; }
+    fi
+  fi
 
   echo "Done."
 }

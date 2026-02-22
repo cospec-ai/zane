@@ -16,7 +16,7 @@ Run the install script:
 curl -fsSL https://raw.githubusercontent.com/cospec-ai/zane/main/install.sh | bash
 ```
 
-This clones the repo to `~/.zane`, installs Anchor dependencies, and adds `zane` to your PATH.
+This clones the repo to `~/.zane`, installs Anchor dependencies, adds `zane` to your PATH, and prompts whether to run `zane self-host` immediately.
 
 ### Build from source
 
@@ -29,10 +29,11 @@ Add `~/.zane/bin` to your PATH.
 
 ## Setup
 
-1. Run `zane start` (or `zane login` to re-authenticate)
-2. A device code is displayed in your terminal
-3. A browser window opens to enter the code
-4. Once authorised, credentials are saved to `~/.zane/credentials.json`
+1. If you skipped deployment during install, run `zane self-host`
+2. Run `zane start` (or `zane login` to re-authenticate)
+3. A device code is displayed in your terminal
+4. A browser window opens to enter the code
+5. Once authorised, credentials are saved to `~/.zane/credentials.json`
 
 ## Running
 
@@ -72,7 +73,7 @@ This checks for Bun, Codex CLI, Anchor source, dependencies, `.env` configuratio
 zane update
 ```
 
-This pulls the latest code and reinstalls Anchor dependencies.
+This resets local repo changes, pulls the latest code, reinstalls Anchor dependencies, and redeploys Cloudflare services when self-host settings are present.
 
 ## Self-hosting
 

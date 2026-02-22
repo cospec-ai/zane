@@ -29,19 +29,31 @@ Orbit uses two generated JWT secrets (`ZANE_WEB_JWT_SECRET` and `ZANE_ANCHOR_JWT
 zane self-host
 ```
 
-The wizard walks through 9 steps:
+You can run this either:
 
-1. Checks for Wrangler and Cloudflare login
-2. Creates a D1 database
-3. Updates `wrangler.toml` files with the database ID
-4. Generates JWT secrets
-5. Runs database migrations
-6. Deploys the Orbit worker and sets secrets
-7. Builds and deploys the web frontend to Pages
-8. Sets the `PASSKEY_ORIGIN` secret (your Pages URL)
-9. Writes the Anchor `.env` with your Orbit URL for both WebSocket and auth
+1. During `install.sh` when prompted, or
+2. Later from your terminal with `zane self-host`.
+
+The wizard walks through 10 steps:
+
+1. Validates local project files and required tools
+2. Checks for Wrangler and Cloudflare login
+3. Creates (or reuses) the D1 database
+4. Updates `wrangler.toml` files with the database ID
+5. Generates JWT and VAPID secrets
+6. Runs database migrations
+7. Deploys the Orbit worker and sets secrets
+8. Builds and deploys the web frontend to Pages
+9. Sets `PASSKEY_ORIGIN` and VAPID secrets
+10. Writes the Anchor `.env` with Orbit URLs and database ID
 
 At the end, it prints your deployment URLs and next steps.
+
+## Failure behavior
+
+`zane self-host` now fails fast for critical deployment steps (migrations, worker deploy, Pages deploy, secret updates, final redeploy) and exits non-zero on failure.
+
+If it fails, fix the reported issue and rerun `zane self-host`. The flow is designed to be safely rerunnable.
 
 ## After deployment
 
@@ -50,11 +62,16 @@ At the end, it prints your deployment URLs and next steps.
 
 ## Updating a self-hosted deployment
 
-After running `zane update` to pull the latest code, redeploy the services:
+`zane update` now redeploys web + orbit automatically when self-host settings are present in `.env`.
+
+If `zane update` fails on deploy, rerun the same command after fixing prerequisites (for example Wrangler auth), or redeploy manually:
 
 ```bash
-cd ~/.zane/services/orbit && bunx wrangler deploy
-cd ~/.zane && bun run build && bunx wrangler pages deploy dist --project-name zane
+# Redeploy orbit worker
+(cd ~/.zane/services/orbit && wrangler deploy)
+
+# Rebuild and redeploy web frontend
+(cd ~/.zane && bun run build && wrangler pages deploy dist --project-name zane)
 ```
 
 ## Architecture

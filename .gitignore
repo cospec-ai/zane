@@ -19,11 +19,14 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 .env
 .env.*
 !.env.example
+credentials.json
 
 # caches
 .eslintcache
 .cache
 *.tsbuildinfo
+.wrangler/
+**/.wrangler/
 
 # misc
 .DS_Store

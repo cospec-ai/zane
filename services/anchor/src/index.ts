@@ -637,6 +637,44 @@ async function buildOrbitUrl(): Promise<string | null> {
   }
 }
 
+type OrbitPreflightResult =
+  | { ok: true }
+  | { ok: false; kind: "auth"; detail: string }
+  | { ok: false; kind: "config"; detail: string }
+  | { ok: false; kind: "network"; detail: string };
+
+async function preflightOrbitConnection(): Promise<OrbitPreflightResult> {
+  if (!ORBIT_URL) return { ok: true };
+
+  const orbitUrl = await buildOrbitUrl();
+  if (!orbitUrl) {
+    return { ok: false, kind: "config", detail: "invalid ANCHOR_ORBIT_URL" };
+  }
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8_000);
+    const res = await fetch(orbitUrl, { method: "GET", signal: controller.signal });
+    clearTimeout(timeout);
+
+    // Gateway auth passes first, then Upgrade is checked. 426 means auth accepted.
+    if (res.status === 426) return { ok: true };
+
+    const body = (await res.text().catch(() => "")).trim();
+    const detail = body || `HTTP ${res.status}`;
+    if (res.status === 401 || res.status === 403) {
+      return { ok: false, kind: "auth", detail };
+    }
+    if (res.status >= 400 && res.status < 500) {
+      return { ok: false, kind: "config", detail };
+    }
+    return { ok: false, kind: "network", detail };
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    return { ok: false, kind: "network", detail };
+  }
+}
+
 function stopOrbitHeartbeat(): void {
   if (orbitHeartbeatInterval) {
     clearInterval(orbitHeartbeatInterval);
@@ -679,8 +717,10 @@ async function connectOrbit(): Promise<void> {
   orbitConnecting = true;
   const ws = new WebSocket(url);
   orbitSocket = ws;
+  let opened = false;
 
   ws.addEventListener("open", () => {
+    opened = true;
     orbitConnecting = false;
     ws.send(JSON.stringify({
       type: "anchor.hello",
@@ -768,6 +808,9 @@ async function connectOrbit(): Promise<void> {
 
   ws.addEventListener("close", () => {
     stopOrbitHeartbeat();
+    if (!opened) {
+      console.warn("[anchor] orbit socket closed before handshake completed");
+    }
     orbitSocket = null;
     orbitConnecting = false;
     setTimeout(() => void connectOrbit(), 2_000);
@@ -775,6 +818,9 @@ async function connectOrbit(): Promise<void> {
 
   ws.addEventListener("error", () => {
     stopOrbitHeartbeat();
+    if (!opened) {
+      console.warn("[anchor] orbit socket error during handshake");
+    }
     orbitSocket = null;
     orbitConnecting = false;
   });
@@ -1020,6 +1066,22 @@ async function startup() {
   }
 
   if (ORBIT_URL) {
+    const preflight = await preflightOrbitConnection();
+    if (!preflight.ok) {
+      if (preflight.kind === "auth") {
+        console.error(`[anchor] Orbit authentication failed: ${preflight.detail}`);
+        console.error("[anchor] Run 'zane login' and then retry 'zane start'.");
+        process.exit(1);
+      }
+      if (preflight.kind === "config") {
+        console.error(`[anchor] Orbit configuration failed: ${preflight.detail}`);
+        console.error("[anchor] Check ANCHOR_ORBIT_URL/AUTH_URL in your .env.");
+        process.exit(1);
+      }
+      console.warn(`[anchor] Orbit preflight warning: ${preflight.detail}`);
+      console.warn("[anchor] Continuing startup; Orbit may reconnect automatically.");
+    }
+
     console.log(`  Orbit:     ${ORBIT_URL}`);
   } else {
     console.log(`  Orbit:     disabled (local-only mode)`);

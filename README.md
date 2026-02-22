@@ -50,7 +50,15 @@ Zane lets you monitor and control [Codex CLI](https://github.com/openai/codex) s
 curl -fsSL https://raw.githubusercontent.com/cospec-ai/zane/main/install.sh | bash
 ```
 
+The installer now prompts whether to run self-host deployment immediately or skip and run it later.
+
 ### Run
+
+```bash
+zane start
+```
+
+If you skipped deployment during install, run:
 
 ```bash
 zane self-host
