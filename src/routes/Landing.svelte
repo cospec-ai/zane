@@ -1,11 +1,14 @@
 <script lang="ts">
   import { auth } from "../lib/auth.svelte";
+  import { config } from "../lib/config.svelte";
   import { theme } from "../lib/theme.svelte";
   import { pwa } from "../lib/pwa.svelte";
 
   const themeIcons = { system: "◐", light: "○", dark: "●" } as const;
 
   const isSignedIn = $derived(auth.status === "signed_in");
+  const isLocalMode = $derived(auth.isLocalMode);
+  const hasConfiguredUrl = $derived(Boolean(config.url?.trim()));
 </script>
 
 <svelte:head>
@@ -19,7 +22,9 @@
       {#if pwa.canInstall && !pwa.isStandalone}
         <button class="ghost-btn" type="button" onclick={() => pwa.install()}>Install app</button>
       {/if}
-      {#if isSignedIn}
+      {#if isSignedIn && isLocalMode && !hasConfiguredUrl}
+        <a class="primary-btn" href="/settings">Configure connection</a>
+      {:else if isSignedIn}
         <a class="primary-btn" href="/app">Go to app</a>
       {:else}
         <a class="primary-btn" href="/login">Sign in</a>
@@ -36,7 +41,18 @@
       <p>
         Zane lets you start and supervise Codex CLI sessions running on your Mac from a handheld web client.
       </p>
-      {#if !isSignedIn}
+      {#if isLocalMode && !hasConfiguredUrl}
+        <div class="hero-actions row">
+          <a class="primary-btn" href="/settings">Configure Anchor URL</a>
+        </div>
+        <p class="local-mode-hint">Local mode active — no sign-in required</p>
+      {:else if isLocalMode && hasConfiguredUrl}
+        <div class="hero-actions row">
+          <a class="primary-btn" href="/app">Go to app</a>
+          <a class="ghost-btn" href="/settings">Settings</a>
+        </div>
+        <p class="local-mode-hint">Local mode active — no sign-in required</p>
+      {:else if !isSignedIn}
         <div class="hero-actions row">
           <a class="primary-btn" href="/login">Sign in</a>
           <a class="ghost-btn" href="/register">Create account</a>
@@ -137,6 +153,12 @@
   .hero-actions {
     justify-content: center;
     flex-wrap: wrap;
+  }
+
+  .local-mode-hint {
+    font-size: var(--text-xs);
+    color: var(--cli-success, #4ade80);
+    margin: 0;
   }
 
   .primary-btn,

@@ -61,12 +61,12 @@
       </div>
       <div class="section-body stack">
         <div class="field stack">
-          <label for="orbit-url">orbit url</label>
+          <label for="orbit-url">{auth.isLocalMode ? "anchor url" : "orbit url"}</label>
           <input
             id="orbit-url"
             type="text"
             bind:value={config.url}
-            placeholder="wss://orbit.example.com/ws/client"
+            placeholder={auth.isLocalMode ? "ws://<anchor-ip>:8788/ws" : "wss://orbit.example.com/ws/client"}
             disabled={urlLocked}
           />
         </div>
@@ -94,6 +94,11 @@
             ? "Auto-connect paused. Click Connect to resume."
             : "Connection is automatic on app load. Disconnect to pause and to change the URL."}
         </p>
+        {#if auth.isLocalMode}
+          <p class="hint hint-local">
+            Local mode: Connect directly to Anchor on your network (e.g., via Tailscale). No Orbit authentication required.
+          </p>
+        {/if}
       </div>
     </div>
 
@@ -128,14 +133,16 @@
 
     <NotificationSettings />
 
-    <div class="section stack">
-      <div class="section-header">
-        <span class="section-title">Account</span>
+    {#if !auth.isLocalMode}
+      <div class="section stack">
+        <div class="section-header">
+          <span class="section-title">Account</span>
+        </div>
+        <div class="section-body stack">
+          <button class="sign-out-btn" type="button" onclick={() => auth.signOut()}>Sign out</button>
+        </div>
       </div>
-      <div class="section-body stack">
-        <button class="sign-out-btn" type="button" onclick={() => auth.signOut()}>Sign out</button>
-      </div>
-    </div>
+    {/if}
   </div>
 </div>
 
@@ -286,6 +293,10 @@
 
   .hint-error {
     color: var(--cli-error);
+  }
+
+  .hint-local {
+    color: var(--cli-success, #4ade80);
   }
 
   .hint code {
