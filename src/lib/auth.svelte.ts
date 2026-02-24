@@ -7,7 +7,24 @@ import type {
 const STORE_KEY = "__zane_auth_store__";
 const STORAGE_KEY = "zane_auth_token";
 const REFRESH_STORAGE_KEY = "zane_refresh_token";
+const LOCAL_MODE_KEY = "zane_local_mode";
 const AUTH_BASE_URL = (import.meta.env.AUTH_URL ?? "").replace(/\/$/, "");
+
+/**
+ * Local mode is enabled when:
+ * 1. No AUTH_URL is configured (no Orbit server to auth against), OR
+ * 2. Explicitly enabled via localStorage
+ *
+ * This allows direct connection to Anchor without authentication,
+ * perfect for trusted networks like Tailscale.
+ */
+function isLocalMode(): boolean {
+  // Auto-detect: no AUTH_URL means no auth server available
+  if (!AUTH_BASE_URL) return true;
+  // Manual override via localStorage
+  if (typeof localStorage === "undefined") return false;
+  return localStorage.getItem(LOCAL_MODE_KEY) === "1";
+}
 
 type AuthStatus = "loading" | "signed_out" | "signed_in" | "needs_setup";
 
@@ -95,6 +112,14 @@ class AuthStore {
   async initialize() {
     this.status = "loading";
     this.error = null;
+
+    // Local mode: skip all auth for trusted networks (e.g., Tailscale)
+    if (isLocalMode()) {
+      this.status = "signed_in";
+      this.user = { id: "local", name: "local" };
+      this.token = "local-mode";
+      return;
+    }
 
     try {
       const response = await fetch(apiUrl("/auth/session"), {
@@ -241,6 +266,29 @@ class AuthStore {
     this.status = "signed_out";
     this.error = null;
     this.#clearToken();
+  }
+
+  /** Enable local mode for trusted networks (bypasses all auth) */
+  enableLocalMode(): void {
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem(LOCAL_MODE_KEY, "1");
+    }
+    this.status = "signed_in";
+    this.user = { id: "local", name: "local" };
+    this.token = "local-mode";
+  }
+
+  /** Disable local mode and return to normal auth flow */
+  disableLocalMode(): void {
+    if (typeof localStorage !== "undefined") {
+      localStorage.removeItem(LOCAL_MODE_KEY);
+    }
+    void this.initialize();
+  }
+
+  /** Check if local mode is active */
+  get isLocalMode(): boolean {
+    return isLocalMode();
   }
 
   #applySession(payload: AuthVerifyResponse): void {

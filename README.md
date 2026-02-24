@@ -74,6 +74,55 @@ On first run:
 
 This path deploys and uses your own Cloudflare account, and is the current generally available setup. Managed Orbit access is currently waitlist-only.
 
+## Local Mode (No Cloudflare)
+
+If your devices are on a trusted private network (e.g., Tailscale, WireGuard, or LAN), you can skip Cloudflare entirely and connect directly to Anchor.
+
+```
+   Phone / Browser
+         |
+         | WebSocket (no auth)
+         ↓
+   Anchor (local daemon)
+         |
+         | JSON-RPC over stdio
+         ↓
+   Codex app-server
+```
+
+### Setup
+
+1. **Run Anchor without Orbit:**
+
+   ```bash
+   cd services/anchor
+   bun install
+   ANCHOR_ORBIT_URL="" bun run dev
+   ```
+
+2. **Run the web frontend:**
+
+   ```bash
+   bun install
+   bun dev -- --host 0.0.0.0
+   ```
+
+3. **Access from your device:**
+
+   Open `http://<your-ip>:5173/` in your browser. Local mode activates automatically when no `AUTH_URL` is configured — no sign-in required.
+
+4. **Configure the Anchor URL:**
+
+   In Settings, enter: `ws://<your-ip>:8788/ws`
+
+### When to use local mode
+
+- **Tailscale / WireGuard** — devices on encrypted mesh network
+- **Local development** — testing without Cloudflare deployment
+- **Air-gapped environments** — no external network access
+
+> **Security note:** Local mode has no authentication. Only use on networks you trust.
+
 ## CLI
 
 | Command | Description |
