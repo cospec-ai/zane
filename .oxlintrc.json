@@ -1,0 +1,30 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "ignorePatterns": [
+    ".ideas/**",
+    "dist/**",
+    ".docs/**",
+    ".wrangler/**",
+    ".svelte-kit/**",
+    "services/**/node_modules/**"
+  ],
+  "rules": {
+    "prefer-const": "error",
+    "no-unused-vars": [
+      "error",
+      {
+        "argsIgnorePattern": "^_",
+        "varsIgnorePattern": "^_"
+      }
+    ]
+  },
+  "overrides": [
+    {
+      "files": ["*.svelte"],
+      "rules": {
+        "prefer-const": "off",
+        "no-unassigned-vars": "off"
+      }
+    }
+  ]
+}

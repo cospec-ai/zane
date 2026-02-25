@@ -6,7 +6,6 @@
     placeholder?: string;
   }
 
-  // eslint-disable-next-line prefer-const -- value is $bindable and reassigned
   let { value = $bindable(""), placeholder = "/path/to/project" }: Props = $props();
 
   let browsing = $state(false);

@@ -8,11 +8,13 @@
     "preview": "bunx --bun vite preview --port 4173",
     "deploy": "bun run build && bunx wrangler pages deploy dist --project-name zane --branch main",
     "migrate": "bunx wrangler d1 migrations apply zane --remote",
+    "lint": "oxlint .",
+    "lint:fix": "oxlint --fix .",
     "prepare": "husky"
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx,svelte}": [
-      "eslint --fix"
+      "oxlint --fix"
     ]
   },
   "dependencies": {
@@ -29,15 +31,9 @@
     "@sveltejs/vite-plugin-svelte": "^5.0.0",
     "@types/dompurify": "^3.2.0",
     "@types/node": "^25.1.0",
-    "@typescript-eslint/eslint-plugin": "^8.43.0",
-    "@typescript-eslint/parser": "^8.43.0",
-    "eslint": "^9.20.0",
-    "eslint-config-prettier": "^9.1.0",
-    "eslint-plugin-svelte": "^3.14.0",
     "husky": "^9.1.7",
-    "jiti": "^2.6.1",
     "lint-staged": "^15.2.11",
-    "svelte-eslint-parser": "^1.4.1",
+    "oxlint": "^1.50.0",
     "typescript": "^5.7.0",
     "vite": "^6.0.0"
   }
