@@ -25,6 +25,7 @@
     let trackedPlanId: string | null = null;
     let container: HTMLDivElement | undefined;
     let turnStartTime = $state<number | undefined>(undefined);
+    let sendError = $state<string | null>(null);
 
     const threadId = $derived(route.params.id);
     const selectedModelOption = $derived(models.options.find((option) => option.value === model) ?? null);
@@ -79,11 +80,8 @@
         }
     });
 
-    let sendError = $state<string | null>(null);
-
     function handleSubmit(inputText: string) {
         if (!inputText || !threadId) return;
-
         sendError = null;
 
         const params: Record<string, unknown> = {
@@ -253,13 +251,19 @@
             {/if}
         {/if}
 
-        {#if sendError || (socket.status !== "connected" && socket.status !== "connecting" && socket.error)}
+        {#if sendError || socket.status === "reconnecting" || (socket.status !== "connected" && socket.status !== "connecting" && socket.error)}
             <div class="connection-error row">
                 <span class="error-icon row">!</span>
-                <span class="error-text">{sendError || socket.error}</span>
-                {#if socket.status === "reconnecting"}
-                    <span class="error-hint">Reconnecting automatically...</span>
-                {:else if socket.status === "error" || socket.status === "disconnected"}
+                <span class="error-text">
+                    {#if sendError}
+                        {sendError}
+                    {:else if socket.status === "reconnecting"}
+                        Reconnecting...
+                    {:else}
+                        {socket.error}
+                    {/if}
+                </span>
+                {#if socket.status === "error" || socket.status === "disconnected"}
                     <button type="button" class="retry-btn" onclick={() => socket.reconnect()}>
                         Retry
                     </button>
@@ -344,11 +348,6 @@
     .error-text {
         color: var(--cli-error);
         flex: 1;
-    }
-
-    .error-hint {
-        color: var(--cli-text-muted);
-        font-size: var(--text-xs);
     }
 
     .retry-btn {

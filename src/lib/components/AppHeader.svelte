@@ -3,7 +3,6 @@
     import type { ConnectionStatus, SandboxMode } from "../types";
     import { socket } from "../socket.svelte";
     import { connectionManager } from "../connection-manager.svelte";
-    import { anchors } from "../anchors.svelte";
     import ShimmerDot from "./ShimmerDot.svelte";
 
     interface Props {
@@ -36,7 +35,6 @@
     const statusMeta = $derived(statusConfig[status]);
     const selectedSandbox = $derived(sandboxOptions.find((s) => s.value === sandbox) || sandboxOptions[1]);
     const canReconnect = $derived(status === "error" || status === "disconnected");
-    const showAnchorAlert = $derived(status === "connected" && anchors.status === "none");
 
     function handleClickOutside(e: MouseEvent) {
         const target = e.target as HTMLElement;
@@ -88,11 +86,6 @@
         {#if threadId}
             <span class="separator">·</span>
             <span class="thread-id">{threadId.slice(0, 8)}</span>
-        {/if}
-
-        {#if showAnchorAlert}
-            <span class="separator">·</span>
-            <span class="anchor-alert">No device connected</span>
         {/if}
 
         {#if sandbox && onSandboxChange}
@@ -224,15 +217,6 @@
 
     .status-btn.clickable {
         cursor: pointer;
-    }
-
-    .anchor-alert {
-        padding: 0 var(--space-xs);
-        border-radius: var(--radius-sm);
-        border: 1px solid var(--cli-warning);
-        color: var(--cli-warning);
-        font-size: var(--text-xs);
-        line-height: 1.4;
     }
 
     .thread-id {

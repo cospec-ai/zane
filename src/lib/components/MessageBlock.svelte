@@ -1,6 +1,5 @@
 <script lang="ts">
   import type { Message } from "../types";
-  import ShimmerDot from "./ShimmerDot.svelte";
   import Reasoning from "./Reasoning.svelte";
   import Tool from "./Tool.svelte";
 
@@ -52,9 +51,8 @@
     <Tool {message} />
   {:else if isWait}
     <div class="message-line wait row">
-      <span class="prefix" style:color={prefixConfig.color}>{prefixConfig.prefix}</span>
+      <span class="prefix" style:color={"var(--cli-warning)"}>{prefixConfig.prefix}</span>
       <div class="wait-line row">
-        <ShimmerDot color="var(--cli-prefix-tool)" />
         <span class="text dim">{message.text}</span>
       </div>
     </div>
