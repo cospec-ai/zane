@@ -1,5 +1,9 @@
 @import "./lib/styles/tokens.css";
 @import "./lib/styles/layout.css";
+@import "@fontsource/geist-mono/400.css";
+@import "@fontsource/geist-mono/500.css";
+@import "@fontsource/geist-mono/600.css";
+@import "@fontsource/geist-mono/700.css";
 
 * {
   box-sizing: border-box;
