@@ -35,7 +35,7 @@
   </div>
 
   <div class="content stack">
-    {#if loading}
+    {#if loading && recentThreads.length === 0}
       <div class="loading row">
         <ShimmerDot /> Loading sessions...
       </div>
