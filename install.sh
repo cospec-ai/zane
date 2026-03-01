@@ -117,6 +117,7 @@ fi
 
 # ── Check/install Bun ───────────────────────────
 if command -v bun &>/dev/null; then
+  bun upgrade --stable &>/dev/null || true
   pass "bun $(bun --version)"
 else
   warn "bun not found"
@@ -273,6 +274,7 @@ pass "Added to PATH in$added_to"
 # ── Self-host setup ────────────────────────────
 step "Self-host setup"
 local_wizard="$ZANE_HOME/bin/self-host.sh"
+self_hosted=0
 if [[ ! -f "$local_wizard" ]]; then
   warn "Self-host wizard not found at $local_wizard"
   ensure_env_file
@@ -281,20 +283,44 @@ elif confirm "  Run self-host deployment now?"; then
   printf "  ${DIM}Deploying to your Cloudflare account...${RESET}\n"
   # shellcheck source=/dev/null
   source "$local_wizard"
+  self_hosted=1
 else
   ensure_env_file
-  echo "  Skipped cloud deployment. Run 'zane self-host' when you're ready."
+  echo "  Installing web dependencies..."
+  retry 3 3 "Web dependency install" bash -c 'cd "$1" && bun install --silent' _ "$ZANE_HOME" \
+    || abort "Failed to install web dependencies."
+  pass "Web dependencies installed"
+  echo ""
+  echo "  Skipped cloud deployment."
+  echo ""
+  printf "  ${BOLD}To use from your phone or another device (no Cloudflare):${RESET}\n"
+  echo "    1. Start Anchor:    zane start"
+  printf "    2. Start web UI:    ${BOLD}cd $ZANE_HOME && bun dev -- --host 0.0.0.0${RESET}\n"
+  echo "    3. Find your Mac's IP: ipconfig getifaddr en0"
+  echo "       (use your Tailscale IP if on a mesh network)"
+  echo "    4. Open on your phone: http://<your-mac-ip>:5173"
+  echo "    5. In Settings, set Anchor URL to: ws://<your-mac-ip>:8788/ws"
+  echo ""
+  printf "  ${BOLD}To deploy to Cloudflare later:${RESET}\n"
+  echo "    zane self-host"
 fi
 
 # ── Done ────────────────────────────────────────
 echo ""
 printf "${GREEN}${BOLD}Zane installed successfully!${RESET}\n"
 echo ""
-echo "  Get started:"
-printf "    ${BOLD}zane start${RESET}    Start the anchor service\n"
-printf "    ${BOLD}zane doctor${RESET}   Check your setup\n"
-printf "    ${BOLD}zane config${RESET}   Edit configuration\n"
-printf "    ${BOLD}zane help${RESET}     See all commands\n"
+if [[ $self_hosted -eq 1 ]]; then
+  echo "  Get started:"
+  printf "    ${BOLD}zane start${RESET}    Sign in and start the anchor service\n"
+  printf "    ${BOLD}zane doctor${RESET}   Check your setup\n"
+  printf "    ${BOLD}zane help${RESET}     See all commands\n"
+else
+  echo "  Commands:"
+  printf "    ${BOLD}zane start${RESET}      Start the anchor service\n"
+  printf "    ${BOLD}zane doctor${RESET}     Check your setup\n"
+  printf "    ${BOLD}zane self-host${RESET}  Deploy to Cloudflare when ready\n"
+  printf "    ${BOLD}zane help${RESET}       See all commands\n"
+fi
 echo ""
 echo "  You may need to restart your terminal or run:"
 echo "    source ~/.zshrc"

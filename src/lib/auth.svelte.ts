@@ -10,18 +10,8 @@ const REFRESH_STORAGE_KEY = "zane_refresh_token";
 const LOCAL_MODE_KEY = "zane_local_mode";
 const AUTH_BASE_URL = (import.meta.env.AUTH_URL ?? "").replace(/\/$/, "");
 
-/**
- * Local mode is enabled when:
- * 1. No AUTH_URL is configured (no Orbit server to auth against), OR
- * 2. Explicitly enabled via localStorage
- *
- * This allows direct connection to Anchor without authentication,
- * perfect for trusted networks like Tailscale.
- */
-function isLocalMode(): boolean {
-  // Auto-detect: no AUTH_URL means no auth server available
+function readLocalModeFromStorage(): boolean {
   if (!AUTH_BASE_URL) return true;
-  // Manual override via localStorage
   if (typeof localStorage === "undefined") return false;
   return localStorage.getItem(LOCAL_MODE_KEY) === "1";
 }
@@ -100,11 +90,15 @@ class AuthStore {
   user = $state<AuthUser | null>(null);
   busy = $state(false);
   error = $state<string | null>(null);
+  isLocalMode = $state(false);
+  // True when an Orbit server exists and local mode can be toggled
+  readonly canToggleLocalMode = !!AUTH_BASE_URL;
   #refreshToken: string | null = null;
   #refreshTimer: ReturnType<typeof setTimeout> | null = null;
   #refreshPromise: Promise<boolean> | null = null;
 
   constructor() {
+    this.isLocalMode = readLocalModeFromStorage();
     this.#loadToken();
     void this.initialize();
   }
@@ -113,11 +107,10 @@ class AuthStore {
     this.status = "loading";
     this.error = null;
 
-    // Local mode: skip all auth for trusted networks (e.g., Tailscale)
-    if (isLocalMode()) {
+    if (this.isLocalMode) {
       this.status = "signed_in";
       this.user = { id: "local", name: "local" };
-      this.token = "local-mode";
+      this.token = null;
       return;
     }
 
@@ -273,22 +266,18 @@ class AuthStore {
     if (typeof localStorage !== "undefined") {
       localStorage.setItem(LOCAL_MODE_KEY, "1");
     }
+    this.isLocalMode = true;
     this.status = "signed_in";
     this.user = { id: "local", name: "local" };
-    this.token = "local-mode";
+    this.token = null;
   }
 
-  /** Disable local mode and return to normal auth flow */
   disableLocalMode(): void {
     if (typeof localStorage !== "undefined") {
       localStorage.removeItem(LOCAL_MODE_KEY);
     }
+    this.isLocalMode = false;
     void this.initialize();
-  }
-
-  /** Check if local mode is active */
-  get isLocalMode(): boolean {
-    return isLocalMode();
   }
 
   #applySession(payload: AuthVerifyResponse): void {

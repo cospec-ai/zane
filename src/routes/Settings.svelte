@@ -60,6 +60,31 @@
         <span class="section-title">Connection</span>
       </div>
       <div class="section-body stack">
+        {#if auth.canToggleLocalMode}
+          <div class="field stack">
+            <span class="field-label">mode</span>
+            <div class="mode-toggle row">
+              <button
+                class="mode-btn {!auth.isLocalMode ? 'active' : ''}"
+                type="button"
+                onclick={() => {
+                  if (!auth.isLocalMode) return;
+                  connectionManager.requestDisconnect();
+                  auth.disableLocalMode();
+                }}
+              >orbit</button>
+              <button
+                class="mode-btn {auth.isLocalMode ? 'active' : ''}"
+                type="button"
+                onclick={() => {
+                  if (auth.isLocalMode) return;
+                  connectionManager.requestDisconnect();
+                  auth.enableLocalMode();
+                }}
+              >local</button>
+            </div>
+          </div>
+        {/if}
         <div class="field stack">
           <label for="orbit-url">{auth.isLocalMode ? "anchor url" : "orbit url"}</label>
           <input
@@ -94,11 +119,6 @@
             ? "Auto-connect paused. Click Connect to resume."
             : "Connection is automatic on app load. Disconnect to pause and to change the URL."}
         </p>
-        {#if auth.isLocalMode}
-          <p class="hint hint-local">
-            Local mode: Connect directly to Anchor on your network (e.g., via Tailscale). No Orbit authentication required.
-          </p>
-        {/if}
       </div>
     </div>
 
@@ -107,7 +127,13 @@
         <span class="section-title">Devices</span>
       </div>
       <div class="section-body stack">
-        {#if !isSocketConnected}
+        {#if auth.isLocalMode}
+          <p class="hint {isSocketConnected ? 'hint-local' : ''}">
+            {isSocketConnected
+              ? "Direct Anchor connection active."
+              : "Enter the Anchor URL above and click Connect."}
+          </p>
+        {:else if !isSocketConnected}
           <p class="hint">
             Connect to load devices.
           </p>
@@ -193,10 +219,47 @@
     --stack-gap: var(--space-xs);
   }
 
-  .field label {
+  .field label,
+  .field-label {
     color: var(--cli-text-dim);
     font-size: var(--text-xs);
     text-transform: lowercase;
+  }
+
+  .mode-toggle {
+    gap: 0;
+    width: fit-content;
+  }
+
+  .mode-btn {
+    padding: var(--space-xs) var(--space-sm);
+    background: transparent;
+    border: 1px solid var(--cli-border);
+    color: var(--cli-text-muted);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+  }
+
+  .mode-btn:first-child {
+    border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+  }
+
+  .mode-btn:last-child {
+    border-left: none;
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  }
+
+  .mode-btn.active {
+    background: var(--cli-bg-elevated);
+    color: var(--cli-text);
+    border-color: var(--cli-text-muted);
+  }
+
+  .mode-btn:not(.active):hover {
+    background: var(--cli-bg-hover);
+    color: var(--cli-text);
   }
 
   .field input {

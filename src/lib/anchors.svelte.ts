@@ -1,4 +1,5 @@
 import { socket } from "./socket.svelte";
+import { auth } from "./auth.svelte";
 
 const STORE_KEY = "__zane_anchors_store__";
 const ANCHOR_CHECK_TIMEOUT_MS = 5_000;
@@ -55,6 +56,8 @@ class AnchorsStore {
       this.status = "unknown";
       return;
     }
+    // No Orbit relay in local mode
+    if (auth.isLocalMode) return;
     this.status = "checking";
     this.#armTimeout();
     socket.requestAnchors();

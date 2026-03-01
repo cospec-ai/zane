@@ -35,7 +35,9 @@ class ConnectionManager {
   }
 
   #connectNow(): void {
-    if (auth.status !== "signed_in" || !auth.token) return;
+    if (auth.status !== "signed_in") return;
+    // In local mode there is no token
+    if (!auth.isLocalMode && !auth.token) return;
     if (socket.status === "connected" || socket.status === "connecting" || socket.status === "reconnecting") {
       return;
     }

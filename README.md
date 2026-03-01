@@ -41,7 +41,7 @@ Zane lets you monitor and control [Codex CLI](https://github.com/openai/codex) s
 ### Requirements
 
 - macOS (Apple Silicon or Intel)
-- [Bun](https://bun.sh) runtime
+- [Bun](https://bun.sh) 1.2 or later (`bun upgrade` to update)
 - [Codex CLI](https://github.com/openai/codex) installed and authenticated
 
 ### Install
@@ -92,28 +92,49 @@ If your devices are on a trusted private network (e.g., Tailscale, WireGuard, or
 
 ### Setup
 
-1. **Run Anchor without Orbit:**
+**If you installed via the install script and skipped self-host deployment:**
+
+1. In one terminal, start Anchor:
 
    ```bash
-   cd services/anchor
-   bun install
+   zane start
+   ```
+
+2. In a second terminal, start the web UI:
+
+   ```bash
+   cd ~/.zane && bun dev -- --host 0.0.0.0
+   ```
+
+3. Find your Mac's IP address:
+
+   ```bash
+   ipconfig getifaddr en0
+   # or your Tailscale IP: tailscale ip -4
+   ```
+
+4. On your phone or tablet, open `http://<your-mac-ip>:5173`.
+
+5. In Settings, set the Anchor URL to `ws://<your-mac-ip>:8788/ws`.
+
+**If you are working from the source repo:**
+
+1. Start Anchor:
+
+   ```bash
+   cd services/anchor && bun install
    ANCHOR_ORBIT_URL="" bun run dev
    ```
 
-2. **Run the web frontend:**
+2. In a second terminal, start the web UI from the repo root:
 
    ```bash
-   bun install
-   bun dev -- --host 0.0.0.0
+   bun install && bun dev -- --host 0.0.0.0
    ```
 
-3. **Access from your device:**
+3. Find your IP, then open `http://<your-ip>:5173` on your phone and set the Anchor URL to `ws://<your-ip>:8788/ws` in Settings.
 
-   Open `http://<your-ip>:5173/` in your browser. Local mode activates automatically when no `AUTH_URL` is configured — no sign-in required.
-
-4. **Configure the Anchor URL:**
-
-   In Settings, enter: `ws://<your-ip>:8788/ws`
+Local mode activates automatically when no `AUTH_URL` is configured — no sign-in required.
 
 ### When to use local mode
 
