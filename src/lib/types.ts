@@ -7,9 +7,17 @@ export type ConnectionStatus =
 
 export interface ThreadInfo {
   id: string;
+  name?: string;
   preview?: string;
   createdAt?: number;
   modelProvider?: string;
+  tokenUsage?: TokenUsage;
+}
+
+export interface TokenUsage {
+  inputTokens?: number;
+  outputTokens?: number;
+  totalTokens?: number;
 }
 
 export type ApprovalPolicy = "on-request" | "never";
@@ -53,7 +61,10 @@ export type MessageKind =
   | "user-input-request"
   | "plan"
   | "collab"
-  | "compaction";
+  | "compaction"
+  | "error"
+  | "warning"
+  | "diff";
 
 export interface MessageMetadata {
   filePath?: string;
@@ -65,14 +76,18 @@ export interface MessageMetadata {
 export interface ApprovalRequest {
   id: string;
   rpcId: number; // The JSON-RPC request ID to respond to
-  type: "command" | "file" | "mcp" | "other";
+  type: "command" | "file" | "mcp" | "elicitation" | "other";
   description: string;
   command?: string;
+  cwd?: string;
   filePath?: string;
   toolName?: string;
   reason?: string;
   status: "pending" | "approved" | "declined" | "cancelled";
 }
+
+export type ThreadStatus = "NotLoaded" | "Idle" | "SystemError" | "Active";
+export type ThreadActiveFlag = "WaitingOnApproval" | "WaitingOnUserInput";
 
 export interface UserInputOption {
   label: string;

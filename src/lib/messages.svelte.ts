@@ -648,6 +648,44 @@ class MessagesStore {
       return;
     }
 
+    // MCP server elicitation request (form input)
+    if (method === "mcpServer/elicitation/request") {
+      const rpcId = msg.id as number;
+      const itemId = `elicitation-${rpcId}`;
+      const serverName = (params.serverName as string) || "MCP Server";
+      const request = params.request as { message?: string } | undefined;
+      const description = request?.message || `${serverName} requires input`;
+
+      this.#turnStatusByThread = new Map(this.#turnStatusByThread).set(threadId, "InProgress");
+
+      const approval: ApprovalRequest = {
+        id: itemId,
+        rpcId,
+        type: "elicitation",
+        description,
+        toolName: serverName,
+        status: "pending",
+      };
+
+      this.#pendingApprovals.set(itemId, approval);
+      this.#pendingApprovals = new Map(this.#pendingApprovals);
+
+      const approvalMsg: Message = {
+        id: `approval-${itemId}`,
+        role: "approval",
+        kind: "approval-request",
+        text: description,
+        threadId,
+        approval,
+      };
+      this.#pendingLiveMessages.set(approvalMsg.id, approvalMsg);
+      const existing = this.#byThread.get(threadId);
+      if (!existing?.some((m) => m.id === approvalMsg.id)) {
+        this.#add(threadId, approvalMsg);
+      }
+      return;
+    }
+
     // Approval requests (file changes, commands, etc.)
     if (method?.includes("/requestApproval")) {
       const itemId = (params.itemId as string) || `approval-${Date.now()}`;
@@ -674,11 +712,17 @@ class MessagesStore {
         description = reason || "Action requires approval";
       }
 
+      // Extract richer params from command approval
+      const command = (params.command as string) || undefined;
+      const cwd = (params.cwd as string) || undefined;
+
       const approval: ApprovalRequest = {
         id: itemId,
         rpcId, // Store the RPC ID so we can respond to it
         type: approvalType,
         description,
+        command,
+        cwd,
         status: "pending",
       };
 
@@ -697,6 +741,94 @@ class MessagesStore {
       const existing = this.#byThread.get(threadId);
       if (!existing?.some((m) => m.id === approvalMsg.id)) {
         this.#add(threadId, approvalMsg);
+      }
+      return;
+    }
+
+    // Error notification
+    if (method === "error") {
+      const message = (params.message as string) || (params.error as string) || "Unknown error";
+      this.#add(threadId, {
+        id: `error-${threadId}-${Date.now()}`,
+        role: "tool",
+        kind: "error",
+        text: message,
+        threadId,
+      });
+      return;
+    }
+
+    // Model rerouted notification
+    if (method === "model/rerouted") {
+      const from = (params.fromModel as string) || "";
+      const to = (params.toModel as string) || "";
+      const reason = (params.reason as string) || "";
+      const text = `Model changed from ${from} to ${to}${reason ? `: ${reason}` : ""}`;
+      this.#add(threadId, {
+        id: `reroute-${threadId}-${Date.now()}`,
+        role: "tool",
+        kind: "warning",
+        text,
+        threadId,
+      });
+      return;
+    }
+
+    // Deprecation notice
+    if (method === "deprecationNotice") {
+      const summary = (params.summary as string) || "";
+      const details = (params.details as string) || "";
+      this.#add(threadId, {
+        id: `deprecation-${threadId}-${Date.now()}`,
+        role: "tool",
+        kind: "warning",
+        text: details ? `${summary}\n${details}` : summary,
+        threadId,
+      });
+      return;
+    }
+
+    // Config warning
+    if (method === "configWarning") {
+      const message = (params.message as string) || (params.summary as string) || "Configuration warning";
+      this.#add(threadId, {
+        id: `config-warn-${threadId}-${Date.now()}`,
+        role: "tool",
+        kind: "warning",
+        text: message,
+        threadId,
+      });
+      return;
+    }
+
+    // Turn diff updated
+    if (method === "turn/diff/updated") {
+      const diff = (params.diff as string) || "";
+      if (diff) {
+        const turnId = (params.turnId as string) || "";
+        this.#upsert(threadId, {
+          id: `diff-${threadId}-${turnId}`,
+          role: "tool",
+          kind: "diff",
+          text: diff,
+          threadId,
+        });
+      }
+      return;
+    }
+
+    // Server request resolved (clear the corresponding pending approval)
+    if (method === "serverRequest/resolved") {
+      const requestId = params.requestId as number | undefined;
+      if (requestId != null) {
+        for (const [id, approval] of this.#pendingApprovals) {
+          if (approval.rpcId === requestId && approval.status === "pending") {
+            approval.status = "approved";
+            this.#pendingApprovals = new Map(this.#pendingApprovals);
+            this.#updateApprovalInMessages(id, "approved");
+            break;
+          }
+        }
       }
       return;
     }

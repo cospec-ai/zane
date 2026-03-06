@@ -9,10 +9,12 @@ via Anchor/Orbit. The wire format is JSON-RPC 2.0-like over WebSocket.
 
 | Method | Params | Notes |
 |---|---|---|
-| `thread/start` | `{ cwd, approvalPolicy?, sandbox? }` | Creates a new thread |
+| `thread/start` | `{ cwd, model?, approvalPolicy?, sandbox?, modelProvider?, serviceTier?, config?, baseInstructions?, developerInstructions?, personality? }` | Creates a new thread |
 | `thread/list` | `{ cursor, limit }` | Paginated list |
-| `thread/resume` | `{ threadId }` | Rehydrate a thread (returns turns + items) |
+| `thread/resume` | `{ threadId, model?, modelProvider?, serviceTier?, config? }` | Rehydrate a thread (returns turns + items) |
 | `thread/archive` | `{ threadId }` | Soft-delete |
+| `thread/name/set` | `{ threadId, name }` | Rename a thread |
+| `thread/compact/start` | `{ threadId }` | Trigger context compaction |
 
 ### Anchor Local Git Helpers
 
@@ -92,6 +94,10 @@ These are not JSON-RPC — they are raw control frames handled by the Orbit DO.
 | `thread/started` | `{ thread: ThreadInfo }` | Notification after `thread/start` succeeds |
 | `thread/list` response | `{ data: ThreadInfo[] }` | RPC response |
 | `thread/resume` response | `{ thread: { id, turns: [{ items }] } }` | Full thread history for rehydration |
+| `thread/name/updated` | `{ threadId, name }` | Thread was renamed |
+| `thread/status/changed` | `{ threadId, status }` | Status: `"NotLoaded"`, `"Idle"`, `"SystemError"`, `"Active"` |
+| `thread/tokenUsage/updated` | `{ threadId, inputTokens?, outputTokens?, totalTokens? }` | Token usage update |
+| `thread/closed` | `{ threadId }` | Thread unloaded from server |
 
 ### Turn Lifecycle
 
@@ -125,9 +131,21 @@ with a decision.
 
 | Method | Params |
 |---|---|
-| `item/commandExecution/requestApproval` | `{ threadId, itemId, reason? }` |
+| `item/commandExecution/requestApproval` | `{ threadId, itemId, reason?, command?, cwd? }` |
 | `item/fileChange/requestApproval` | `{ threadId, itemId, reason? }` |
 | `item/mcpToolCall/requestApproval` | `{ threadId, itemId, reason? }` |
+| `mcpServer/elicitation/request` | `{ threadId, serverName, request }` |
+
+### Other Notifications
+
+| Method | Params | Notes |
+|---|---|---|
+| `error` | `{ threadId?, message }` | Server error |
+| `model/rerouted` | `{ threadId, fromModel, toModel, reason }` | Model was changed mid-turn |
+| `deprecationNotice` | `{ summary, details? }` | Deprecation warning |
+| `configWarning` | `{ message }` | Configuration issue |
+| `turn/diff/updated` | `{ threadId, turnId, diff }` | Cumulative workspace diff for the turn |
+| `serverRequest/resolved` | `{ threadId, requestId }` | A pending server request was resolved externally |
 
 ### User Input Requests (JSON-RPC Requests)
 

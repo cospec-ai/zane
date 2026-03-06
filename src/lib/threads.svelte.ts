@@ -1,4 +1,4 @@
-import type { ApprovalPolicy, CollaborationMode, CollaborationModeMask, ModeKind, ReasoningEffort, SandboxMode, ThreadInfo, RpcMessage, ThreadSettings } from "./types";
+import type { ApprovalPolicy, CollaborationMode, CollaborationModeMask, ModeKind, ReasoningEffort, SandboxMode, ThreadInfo, RpcMessage, ThreadSettings, TokenUsage, ThreadStatus as ThreadStatusType } from "./types";
 import { socket } from "./socket.svelte";
 import { messages } from "./messages.svelte";
 import { models } from "./models.svelte";
@@ -18,6 +18,8 @@ class ThreadsStore {
   list = $state<ThreadInfo[]>([]);
   currentId = $state<string | null>(null);
   loading = $state(false);
+  #threadStatusById = $state<Map<string, ThreadStatusType>>(new Map());
+  #tokenUsageById = $state<Map<string, TokenUsage>>(new Map());
 
   #settings = $state<Map<string, ThreadSettings>>(new Map());
   #nextId = 1;
@@ -29,6 +31,16 @@ class ThreadsStore {
   #pendingStartErrorCallback: ((error: Error) => void) | null = null;
   #suppressNextNavigation = false;
   #collaborationPresets: CollaborationModeMask[] = [];
+
+  get currentThreadStatus(): ThreadStatusType | null {
+    if (!this.currentId) return null;
+    return this.#threadStatusById.get(this.currentId) ?? null;
+  }
+
+  get currentTokenUsage(): TokenUsage | null {
+    if (!this.currentId) return null;
+    return this.#tokenUsageById.get(this.currentId) ?? null;
+  }
 
   constructor() {
     this.#loadSettings();
@@ -123,6 +135,28 @@ class ThreadsStore {
     };
   }
 
+  setName(threadId: string, name: string) {
+    const id = this.#nextId++;
+    this.#pendingRequests.set(id, "setName");
+    socket.send({
+      method: "thread/name/set",
+      id,
+      params: { threadId, name },
+    });
+    // Optimistic update
+    this.list = this.list.map((t) => (t.id === threadId ? { ...t, name } : t));
+  }
+
+  compact(threadId: string) {
+    const id = this.#nextId++;
+    this.#pendingRequests.set(id, "compact");
+    socket.send({
+      method: "thread/compact/start",
+      id,
+      params: { threadId },
+    });
+  }
+
   archive(threadId: string) {
     const id = this.#nextId++;
     this.#pendingRequests.set(id, "archive");
@@ -150,6 +184,45 @@ class ThreadsStore {
       if (params?.thread) {
         socket.subscribeThread(params.thread.id);
         this.#handleNewThread(params.thread);
+      }
+      return;
+    }
+
+    if (msg.method === "thread/name/updated") {
+      const params = msg.params as { threadId: string; name: string };
+      if (params?.threadId) {
+        this.list = this.list.map((t) =>
+          t.id === params.threadId ? { ...t, name: params.name } : t,
+        );
+      }
+      return;
+    }
+
+    if (msg.method === "thread/status/changed") {
+      const params = msg.params as { threadId: string; status: ThreadStatusType };
+      if (params?.threadId) {
+        this.#threadStatusById = new Map(this.#threadStatusById).set(params.threadId, params.status);
+      }
+      return;
+    }
+
+    if (msg.method === "thread/tokenUsage/updated") {
+      const params = msg.params as Record<string, unknown> | undefined;
+      const threadId = (params?.threadId as string) || null;
+      if (threadId) {
+        this.#tokenUsageById = new Map(this.#tokenUsageById).set(threadId, {
+          inputTokens: params?.inputTokens as number | undefined,
+          outputTokens: params?.outputTokens as number | undefined,
+          totalTokens: params?.totalTokens as number | undefined,
+        });
+      }
+      return;
+    }
+
+    if (msg.method === "thread/closed") {
+      const params = msg.params as { threadId: string };
+      if (params?.threadId) {
+        this.#threadStatusById = new Map(this.#threadStatusById).set(params.threadId, "NotLoaded");
       }
       return;
     }

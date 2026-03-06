@@ -13,7 +13,9 @@ export const MAX_SUBSCRIBED_THREADS = 1000;
 export const APPROVAL_METHODS = new Set([
   "item/fileChange/requestApproval",
   "item/commandExecution/requestApproval",
+  "item/mcpToolCall/requestApproval",
   "item/tool/requestUserInput",
+  "mcpServer/elicitation/request",
 ]);
 
 export let jwtSecret = "";
