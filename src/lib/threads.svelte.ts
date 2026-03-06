@@ -178,6 +178,26 @@ class ThreadsStore {
     }
   }
 
+  unarchive(threadId: string) {
+    const id = this.#nextId++;
+    this.#pendingRequests.set(id, "unarchive");
+    socket.send({
+      method: "thread/unarchive",
+      id,
+      params: { threadId },
+    });
+  }
+
+  rollback(threadId: string, numTurns = 1) {
+    const id = this.#nextId++;
+    this.#pendingRequests.set(id, "rollback");
+    socket.send({
+      method: "thread/rollback",
+      id,
+      params: { threadId, numTurns },
+    });
+  }
+
   handleMessage(msg: RpcMessage) {
     if (msg.method === "thread/started") {
       const params = msg.params as { thread: ThreadInfo };
@@ -227,6 +247,25 @@ class ThreadsStore {
       return;
     }
 
+    if (msg.method === "thread/archived") {
+      const params = msg.params as { threadId: string };
+      if (params?.threadId) {
+        this.list = this.list.filter((t) => t.id !== params.threadId);
+        if (this.currentId === params.threadId) {
+          this.currentId = null;
+        }
+      }
+      return;
+    }
+
+    if (msg.method === "thread/unarchived") {
+      const params = msg.params as { thread: ThreadInfo };
+      if (params?.thread && !this.list.some((t) => t.id === params.thread.id)) {
+        this.list = [params.thread, ...this.list];
+      }
+      return;
+    }
+
     if (msg.id != null && this.#pendingRequests.has(msg.id as number)) {
       const type = this.#pendingRequests.get(msg.id as number);
       this.#pendingRequests.delete(msg.id as number);
@@ -244,6 +283,23 @@ class ThreadsStore {
       if (type === "collaborationPresets" && msg.result) {
         const result = msg.result as { data: CollaborationModeMask[] };
         this.#collaborationPresets = result.data || [];
+      }
+
+      if (type === "unarchive" && msg.result) {
+        const result = msg.result as { thread?: ThreadInfo };
+        if (result.thread) {
+          socket.subscribeThread(result.thread.id);
+          if (!this.list.some((t) => t.id === result.thread!.id)) {
+            this.list = [result.thread, ...this.list];
+          }
+        }
+      }
+
+      if (type === "rollback" && msg.result) {
+        const result = msg.result as { thread?: { id: string; turns?: Array<{ items?: unknown[] }> } };
+        if (result.thread?.id) {
+          messages.clearThread(result.thread.id);
+        }
       }
 
       if (type === "start" && msg.error) {
