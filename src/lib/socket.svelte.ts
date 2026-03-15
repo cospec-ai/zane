@@ -1,10 +1,15 @@
 import type {
+  AccountInfo,
   ConnectionStatus,
+  FuzzyFileResult,
   GitInspectResult,
   GitWorktreeCreateParams,
   GitWorktreeCreateResult,
   GitWorktreeListResult,
+  McpServerStatus,
+  RateLimitsResponse,
   RpcMessage,
+  Skill,
 } from "./types";
 const HEARTBEAT_INTERVAL = 30_000;
 const HEARTBEAT_TIMEOUT = 10_000;
@@ -317,6 +322,90 @@ class SocketStore {
         reject,
       });
       const result = this.send({ id, method: "anchor.git.worktree.prune", params: { repoRoot } });
+      if (!result.success) {
+        this.#pendingRpc.delete(id);
+        reject(new Error(result.error ?? "Not connected"));
+      }
+    });
+  }
+
+  accountRead(): Promise<AccountInfo> {
+    const id = `account-read-${++this.#rpcIdCounter}`;
+    return new Promise((resolve, reject) => {
+      this.#pendingRpc.set(id, {
+        resolve: (v) => resolve(v as AccountInfo),
+        reject,
+      });
+      const result = this.send({ id, method: "account/read", params: {} });
+      if (!result.success) {
+        this.#pendingRpc.delete(id);
+        reject(new Error(result.error ?? "Not connected"));
+      }
+    });
+  }
+
+  mcpServerStatusList(): Promise<McpServerStatus[]> {
+    const id = `mcp-status-${++this.#rpcIdCounter}`;
+    return new Promise((resolve, reject) => {
+      this.#pendingRpc.set(id, {
+        resolve: (v) => {
+          const result = v as { data?: McpServerStatus[] } | McpServerStatus[];
+          resolve(Array.isArray(result) ? result : result?.data ?? []);
+        },
+        reject,
+      });
+      const result = this.send({ id, method: "mcpServerStatus/list", params: {} });
+      if (!result.success) {
+        this.#pendingRpc.delete(id);
+        reject(new Error(result.error ?? "Not connected"));
+      }
+    });
+  }
+
+  skillsList(): Promise<Skill[]> {
+    const id = `skills-list-${++this.#rpcIdCounter}`;
+    return new Promise((resolve, reject) => {
+      this.#pendingRpc.set(id, {
+        resolve: (v) => {
+          const result = v as { data?: Skill[] } | Skill[];
+          resolve(Array.isArray(result) ? result : result?.data ?? []);
+        },
+        reject,
+      });
+      const result = this.send({ id, method: "skills/list", params: {} });
+      if (!result.success) {
+        this.#pendingRpc.delete(id);
+        reject(new Error(result.error ?? "Not connected"));
+      }
+    });
+  }
+
+  fuzzyFileSearch(query: string, limit = 10): Promise<FuzzyFileResult[]> {
+    const id = `fuzzy-${++this.#rpcIdCounter}`;
+    return new Promise((resolve, reject) => {
+      this.#pendingRpc.set(id, {
+        resolve: (v) => {
+          const result = v as { data?: FuzzyFileResult[] } | FuzzyFileResult[];
+          resolve(Array.isArray(result) ? result : result?.data ?? []);
+        },
+        reject,
+      });
+      const result = this.send({ id, method: "fuzzyFileSearch", params: { query, limit } });
+      if (!result.success) {
+        this.#pendingRpc.delete(id);
+        reject(new Error(result.error ?? "Not connected"));
+      }
+    });
+  }
+
+  accountRateLimits(): Promise<RateLimitsResponse> {
+    const id = `account-rate-limits-${++this.#rpcIdCounter}`;
+    return new Promise((resolve, reject) => {
+      this.#pendingRpc.set(id, {
+        resolve: (v) => resolve(v as RateLimitsResponse),
+        reject,
+      });
+      const result = this.send({ id, method: "account/rateLimits/read", params: {} });
       if (!result.success) {
         this.#pendingRpc.delete(id);
         reject(new Error(result.error ?? "Not connected"));

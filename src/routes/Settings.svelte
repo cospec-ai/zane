@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { AccountInfo, RateLimitSnapshot } from "../lib/types";
   import { auth } from "../lib/auth.svelte";
   import { theme } from "../lib/theme.svelte";
   import { config } from "../lib/config.svelte";
@@ -10,7 +11,35 @@
 
   const themeIcons = { system: "◐", light: "○", dark: "●" } as const;
 
+  let accountInfo = $state<AccountInfo | null>(null);
+  let rateLimits = $state<RateLimitSnapshot | null>(null);
+  let accountError = $state<string | null>(null);
+
   const anchorList = $derived(anchors.list);
+
+  $effect(() => {
+    if (socket.status === "connected") {
+      loadAccountInfo();
+    } else {
+      accountInfo = null;
+      rateLimits = null;
+      accountError = null;
+    }
+  });
+
+  async function loadAccountInfo() {
+    accountError = null;
+    try {
+      const [info, limits] = await Promise.allSettled([
+        socket.accountRead(),
+        socket.accountRateLimits(),
+      ]);
+      accountInfo = info.status === "fulfilled" ? info.value : null;
+      rateLimits = limits.status === "fulfilled" ? limits.value.rateLimits : null;
+    } catch {
+      accountError = "Failed to load account info";
+    }
+  }
 
   const platformLabels: Record<string, string> = {
     darwin: "macOS",
@@ -159,16 +188,69 @@
 
     <NotificationSettings />
 
-    {#if !auth.isLocalMode}
-      <div class="section stack">
-        <div class="section-header">
-          <span class="section-title">Account</span>
-        </div>
-        <div class="section-body stack">
-          <button class="sign-out-btn" type="button" onclick={() => auth.signOut()}>Sign out</button>
-        </div>
+    <div class="section stack">
+      <div class="section-header">
+        <span class="section-title">Account</span>
       </div>
-    {/if}
+      <div class="section-body stack">
+        {#if accountError}
+          <p class="hint hint-error">{accountError}</p>
+        {:else if accountInfo}
+          <div class="account-info stack">
+            {#if accountInfo.email}
+              <div class="account-row split">
+                <span class="account-label">email</span>
+                <span class="account-value">{accountInfo.email}</span>
+              </div>
+            {/if}
+            {#if accountInfo.name}
+              <div class="account-row split">
+                <span class="account-label">name</span>
+                <span class="account-value">{accountInfo.name}</span>
+              </div>
+            {/if}
+            {#if accountInfo.plan}
+              <div class="account-row split">
+                <span class="account-label">plan</span>
+                <span class="account-value">{accountInfo.plan}</span>
+              </div>
+            {/if}
+          </div>
+        {:else if socket.status === "connected"}
+          <p class="hint">Loading account info...</p>
+        {:else}
+          <p class="hint">Connect to view account info.</p>
+        {/if}
+
+        {#if rateLimits}
+          <div class="rate-limits stack">
+            <span class="field-label">rate limits{rateLimits.limitName ? ` · ${rateLimits.limitName}` : ""}</span>
+            {#if rateLimits.primary}
+              <div class="rate-limit-row split">
+                <span class="account-label">{rateLimits.primary.windowDurationMins ? `${rateLimits.primary.windowDurationMins}m window` : "primary"}</span>
+                <span class="account-value">{rateLimits.primary.usedPercent}% used</span>
+              </div>
+            {/if}
+            {#if rateLimits.secondary}
+              <div class="rate-limit-row split">
+                <span class="account-label">{rateLimits.secondary.windowDurationMins ? `${rateLimits.secondary.windowDurationMins}m window` : "secondary"}</span>
+                <span class="account-value">{rateLimits.secondary.usedPercent}% used</span>
+              </div>
+            {/if}
+            {#if rateLimits.planType}
+              <div class="rate-limit-row split">
+                <span class="account-label">plan tier</span>
+                <span class="account-value">{rateLimits.planType}</span>
+              </div>
+            {/if}
+          </div>
+        {/if}
+
+        {#if !auth.isLocalMode}
+          <button class="sign-out-btn" type="button" onclick={() => auth.signOut()}>Sign out</button>
+        {/if}
+      </div>
+    </div>
   </div>
 </div>
 
@@ -371,6 +453,29 @@
 
   .hint a {
     color: var(--cli-prefix-agent);
+  }
+
+  .account-info {
+    --stack-gap: var(--space-xs);
+  }
+
+  .account-row,
+  .rate-limit-row {
+    --split-gap: var(--space-sm);
+    font-size: var(--text-xs);
+  }
+
+  .account-label {
+    color: var(--cli-text-dim);
+  }
+
+  .account-value {
+    color: var(--cli-text);
+    text-align: right;
+  }
+
+  .rate-limits {
+    --stack-gap: var(--space-xs);
   }
 
   .sign-out-btn {

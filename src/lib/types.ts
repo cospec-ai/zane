@@ -188,6 +188,31 @@ export interface CollaborationModeMask {
   developer_instructions?: string | null;
 }
 
+export interface AccountInfo {
+  email?: string;
+  name?: string;
+  plan?: string;
+  id?: string;
+}
+
+export interface RateLimitWindow {
+  usedPercent: number;
+  windowDurationMins?: number | null;
+  resetsAt?: number | null;
+}
+
+export interface RateLimitSnapshot {
+  limitId?: string | null;
+  limitName?: string | null;
+  primary?: RateLimitWindow | null;
+  secondary?: RateLimitWindow | null;
+  planType?: string | null;
+}
+
+export interface RateLimitsResponse {
+  rateLimits: RateLimitSnapshot;
+}
+
 export interface GitInspectResult {
   isGitRepo: boolean;
   repoRoot?: string;
@@ -222,3 +247,22 @@ export interface GitWorktreeCreateResult {
   branch: string;
   head: string;
 }
+
+export interface McpServerStatus {
+  name: string;
+  status: "connected" | "connecting" | "disconnected" | "error";
+  error?: string;
+  tools?: string[];
+}
+
+export interface Skill {
+  name: string;
+  description?: string;
+  source?: string;
+}
+
+export interface FuzzyFileResult {
+  path: string;
+  score?: number;
+}
+
