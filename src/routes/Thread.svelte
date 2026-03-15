@@ -1,5 +1,5 @@
 <script lang="ts">
-    import type { ModeKind, ReasoningEffort, SandboxMode } from "../lib/types";
+    import type { ModeKind, ReasoningEffort, SandboxMode, Skill } from "../lib/types";
     import { route } from "../router";
     import { socket } from "../lib/socket.svelte";
     import { threads } from "../lib/threads.svelte";
@@ -26,6 +26,8 @@
     let container: HTMLDivElement | undefined;
     let turnStartTime = $state<number | undefined>(undefined);
     let sendError = $state<string | null>(null);
+    let queuedMessage = $state<{ text: string } | null>(null);
+    let availableSkills = $state<Skill[]>([]);
 
     const threadId = $derived(route.params.id);
     const selectedModelOption = $derived(models.options.find((option) => option.value === model) ?? null);
@@ -123,6 +125,10 @@
         }
     }
 
+    function handleQueue(inputText: string) {
+        queuedMessage = { text: inputText };
+    }
+
     function handleStop() {
         if (!threadId) return;
         const result = messages.interrupt(threadId);
@@ -169,6 +175,17 @@
     $effect(() => {
         if (socket.status === "connected") {
             sendError = null;
+            socket.skillsList().then((s) => { availableSkills = s; }).catch(() => {});
+        }
+    });
+
+    // Handle queued follow-up: when turn completes, auto-send the queued message
+    $effect(() => {
+        const status = (messages.turnStatus ?? "").toLowerCase();
+        if (status !== "inprogress" && queuedMessage && threadId) {
+            const queued = queuedMessage;
+            queuedMessage = null;
+            handleSubmit(queued.text);
         }
     });
 
@@ -282,13 +299,21 @@
         modelOptions={models.options}
         modelsLoading={models.status === "loading"}
         turnActive={(messages.turnStatus ?? "").toLowerCase() === "inprogress"}
+        skills={availableSkills}
         onStop={(messages.turnStatus ?? "").toLowerCase() === "inprogress" ? handleStop : undefined}
         onSubmit={handleSubmit}
         onSteer={threadId ? (text) => messages.steer(threadId, text) : undefined}
+        onQueue={handleQueue}
         onModelChange={(v) => model = v}
         onReasoningChange={(v) => reasoningEffort = v}
         onModeChange={(v) => { modeUserOverride = true; mode = v; }}
     />
+    {#if queuedMessage}
+        <div class="queued-indicator">
+            Queued: {queuedMessage.text.slice(0, 60)}{queuedMessage.text.length > 60 ? "..." : ""}
+            <button type="button" class="cancel-queue" onclick={() => queuedMessage = null}>Cancel</button>
+        </div>
+    {/if}
 </div>
 
 <style>
@@ -369,6 +394,35 @@
     .retry-btn:hover {
         background: var(--cli-error);
         color: white;
+    }
+
+    .queued-indicator {
+        display: flex;
+        align-items: center;
+        gap: var(--space-sm);
+        padding: var(--space-xs) var(--space-md);
+        background: color-mix(in srgb, var(--cli-prefix-agent) 10%, var(--cli-bg));
+        border-top: 1px solid var(--cli-border);
+        font-family: var(--font-mono);
+        font-size: var(--text-xs);
+        color: var(--cli-text-muted);
+    }
+
+    .cancel-queue {
+        margin-left: auto;
+        padding: 2px var(--space-sm);
+        background: transparent;
+        border: 1px solid var(--cli-border);
+        border-radius: var(--radius-sm);
+        color: var(--cli-text-muted);
+        font-family: var(--font-mono);
+        font-size: var(--text-xs);
+        cursor: pointer;
+    }
+
+    .cancel-queue:hover {
+        background: var(--cli-bg-hover);
+        color: var(--cli-text);
     }
 
 </style>
