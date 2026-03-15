@@ -1,5 +1,6 @@
 <script lang="ts">
-  import type { ModeKind, ModelOption, ReasoningEffort } from "../types";
+  import type { ModeKind, ModelOption, ReasoningEffort, Skill, FuzzyFileResult } from "../types";
+  import { socket } from "../socket.svelte";
 
   interface Props {
     model: string;
@@ -8,9 +9,11 @@
     modelOptions?: ModelOption[];
     modelsLoading?: boolean;
     turnActive?: boolean;
+    skills?: Skill[];
     onStop?: () => void;
     onSubmit: (input: string) => void;
     onSteer?: (input: string) => void;
+    onQueue?: (input: string) => void;
     onModelChange: (model: string) => void;
     onReasoningChange: (effort: ReasoningEffort) => void;
     onModeChange?: (mode: ModeKind) => void;
@@ -23,9 +26,11 @@
     modelOptions = [],
     modelsLoading = false,
     turnActive = false,
+    skills = [],
     onStop,
     onSubmit,
     onSteer,
+    onQueue,
     onModelChange,
     onReasoningChange,
     onModeChange,
@@ -34,6 +39,19 @@
   let input = $state("");
   let modelOpen = $state(false);
   let reasoningOpen = $state(false);
+  let textareaEl: HTMLTextAreaElement | undefined;
+
+  // Skills autocomplete state
+  let skillsOpen = $state(false);
+  let skillsFilter = $state("");
+  let skillsIndex = $state(0);
+
+  // File @-mention autocomplete state
+  let mentionOpen = $state(false);
+  let mentionQuery = $state("");
+  let mentionResults = $state<FuzzyFileResult[]>([]);
+  let mentionIndex = $state(0);
+  let mentionSearchTimeout: ReturnType<typeof setTimeout> | undefined;
 
   const canSubmit = $derived(input.trim().length > 0);
 
@@ -64,22 +82,113 @@
       "Medium"
   );
 
+  const filteredSkills = $derived.by(() => {
+    if (!skillsOpen) return [];
+    const q = skillsFilter.toLowerCase();
+    return skills.filter((s) => s.name.toLowerCase().includes(q)).slice(0, 8);
+  });
+
   function handleSubmit(e: Event) {
     e.preventDefault();
     if (!canSubmit) return;
+    closeAutocomplete();
+
+    const trimmed = input.trim();
+
     if (turnActive && onSteer) {
-      onSteer(input.trim());
+      onSteer(trimmed);
+    } else if (turnActive && onQueue) {
+      onQueue(trimmed);
     } else {
-      onSubmit(input.trim());
+      onSubmit(trimmed);
     }
     input = "";
   }
 
   function handleKeydown(e: KeyboardEvent) {
+    // Handle autocomplete navigation
+    if (skillsOpen && filteredSkills.length > 0) {
+      if (e.key === "ArrowDown") { e.preventDefault(); skillsIndex = (skillsIndex + 1) % filteredSkills.length; return; }
+      if (e.key === "ArrowUp") { e.preventDefault(); skillsIndex = (skillsIndex - 1 + filteredSkills.length) % filteredSkills.length; return; }
+      if (e.key === "Tab" || e.key === "Enter") { e.preventDefault(); selectSkill(filteredSkills[skillsIndex]); return; }
+      if (e.key === "Escape") { e.preventDefault(); closeAutocomplete(); return; }
+    }
+
+    if (mentionOpen && mentionResults.length > 0) {
+      if (e.key === "ArrowDown") { e.preventDefault(); mentionIndex = (mentionIndex + 1) % mentionResults.length; return; }
+      if (e.key === "ArrowUp") { e.preventDefault(); mentionIndex = (mentionIndex - 1 + mentionResults.length) % mentionResults.length; return; }
+      if (e.key === "Tab" || e.key === "Enter") { e.preventDefault(); selectMention(mentionResults[mentionIndex]); return; }
+      if (e.key === "Escape") { e.preventDefault(); closeAutocomplete(); return; }
+    }
+
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSubmit(e);
     }
+  }
+
+  function handleInput() {
+    const value = input;
+    const cursorPos = textareaEl?.selectionStart ?? value.length;
+    const textBeforeCursor = value.slice(0, cursorPos);
+
+    // Check for / at start of input for skills
+    const slashMatch = textBeforeCursor.match(/^\/(\S*)$/);
+    if (slashMatch && skills.length > 0) {
+      skillsFilter = slashMatch[1];
+      skillsIndex = 0;
+      skillsOpen = true;
+      mentionOpen = false;
+      return;
+    }
+    skillsOpen = false;
+
+    // Check for @ trigger for file mentions
+    const atMatch = textBeforeCursor.match(/@(\S+)$/);
+    if (atMatch && atMatch[1].length >= 1) {
+      mentionQuery = atMatch[1];
+      mentionIndex = 0;
+      mentionOpen = true;
+      skillsOpen = false;
+      if (mentionSearchTimeout) clearTimeout(mentionSearchTimeout);
+      mentionSearchTimeout = setTimeout(() => searchFiles(mentionQuery), 150);
+      return;
+    }
+    mentionOpen = false;
+  }
+
+  function selectSkill(skill: Skill) {
+    input = `/${skill.name} `;
+    skillsOpen = false;
+    textareaEl?.focus();
+  }
+
+  function selectMention(result: FuzzyFileResult) {
+    const cursorPos = textareaEl?.selectionStart ?? input.length;
+    const textBeforeCursor = input.slice(0, cursorPos);
+    const atIdx = textBeforeCursor.lastIndexOf("@");
+    if (atIdx >= 0) {
+      input = input.slice(0, atIdx) + "@" + result.path + " " + input.slice(cursorPos);
+    }
+    mentionOpen = false;
+    textareaEl?.focus();
+  }
+
+  async function searchFiles(query: string) {
+    if (!socket.isHealthy) return;
+    try {
+      const results = await socket.fuzzyFileSearch(query, 8);
+      if (mentionOpen && mentionQuery === query) {
+        mentionResults = results;
+      }
+    } catch {
+      mentionResults = [];
+    }
+  }
+
+  function closeAutocomplete() {
+    skillsOpen = false;
+    mentionOpen = false;
   }
 
   function closeAllDropdowns() {
@@ -92,6 +201,9 @@
     if (!target.closest(".dropdown")) {
       closeAllDropdowns();
     }
+    if (!target.closest(".autocomplete-menu") && !target.closest("textarea")) {
+      closeAutocomplete();
+    }
   }
 </script>
 
@@ -99,12 +211,53 @@
 
 <form class="prompt-input" onsubmit={handleSubmit}>
   <div class="input-container stack">
-    <textarea
-      bind:value={input}
-      onkeydown={handleKeydown}
-      placeholder={turnActive ? "Steer the current turn..." : "What would you like to do?"}
-      rows="1"
-    ></textarea>
+    <div class="textarea-wrapper">
+      <textarea
+        bind:this={textareaEl}
+        bind:value={input}
+        onkeydown={handleKeydown}
+        oninput={handleInput}
+        placeholder={turnActive
+          ? (onQueue ? "Queue a follow-up or steer the turn..." : "Steer the current turn...")
+          : "What would you like to do?"}
+        rows="1"
+      ></textarea>
+
+      <!-- Skills autocomplete -->
+      {#if skillsOpen && filteredSkills.length > 0}
+        <div class="autocomplete-menu">
+          {#each filteredSkills as skill, i}
+            <button
+              type="button"
+              class="autocomplete-item"
+              class:focused={i === skillsIndex}
+              onclick={() => selectSkill(skill)}
+            >
+              <span class="ac-name">/{skill.name}</span>
+              {#if skill.description}
+                <span class="ac-desc">{skill.description}</span>
+              {/if}
+            </button>
+          {/each}
+        </div>
+      {/if}
+
+      <!-- File @-mention autocomplete -->
+      {#if mentionOpen && mentionResults.length > 0}
+        <div class="autocomplete-menu">
+          {#each mentionResults as result, i}
+            <button
+              type="button"
+              class="autocomplete-item"
+              class:focused={i === mentionIndex}
+              onclick={() => selectMention(result)}
+            >
+              <span class="ac-name">@{result.path}</span>
+            </button>
+          {/each}
+        </div>
+      {/if}
+    </div>
 
     <div class="footer split">
       <div class="tools row">
@@ -242,7 +395,7 @@
             </svg>
           </button>
         {/if}
-        <button type="submit" class="submit-btn row" disabled={!canSubmit}>
+        <button type="submit" class="submit-btn row" disabled={!canSubmit} title={turnActive && onQueue ? "Queue follow-up" : "Send"}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="m6 17 5-5-5-5"/>
             <path d="m13 17 5-5-5-5"/>
@@ -271,8 +424,13 @@
     box-shadow: var(--shadow-focus);
   }
 
+  .textarea-wrapper {
+    position: relative;
+  }
+
   textarea {
     flex: 1;
+    width: 100%;
     padding: var(--space-md);
     font-family: var(--font-mono);
     line-height: 1.6;
@@ -283,6 +441,7 @@
     min-height: 4rem;
     max-height: 12rem;
     field-sizing: content;
+    box-sizing: border-box;
   }
 
   textarea:focus {
@@ -291,6 +450,57 @@
 
   textarea::placeholder {
     color: var(--cli-text-muted);
+  }
+
+  /* Autocomplete menu */
+  .autocomplete-menu {
+    position: absolute;
+    bottom: 100%;
+    left: var(--space-md);
+    right: var(--space-md);
+    max-height: 200px;
+    overflow-y: auto;
+    margin-bottom: var(--space-xs);
+    background: var(--cli-bg-elevated);
+    border: 1px solid var(--cli-border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-popover);
+    z-index: 200;
+    animation: fadeIn 0.1s ease;
+  }
+
+  .autocomplete-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    width: 100%;
+    padding: var(--space-sm) var(--space-md);
+    background: transparent;
+    border: none;
+    color: var(--cli-text);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    text-align: left;
+    cursor: pointer;
+    transition: background var(--transition-fast);
+  }
+
+  .autocomplete-item:hover,
+  .autocomplete-item.focused {
+    background: var(--cli-bg-hover);
+  }
+
+  .ac-name {
+    color: var(--cli-prefix-agent);
+    font-weight: 500;
+    flex-shrink: 0;
+  }
+
+  .ac-desc {
+    color: var(--cli-text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .footer {
