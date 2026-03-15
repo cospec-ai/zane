@@ -14,7 +14,6 @@ via Anchor/Orbit. The wire format is JSON-RPC 2.0-like over WebSocket.
 | `thread/resume` | `{ threadId, model?, modelProvider?, serviceTier?, config? }` | Rehydrate a thread (returns turns + items) |
 | `thread/archive` | `{ threadId }` | Soft-delete |
 | `thread/name/set` | `{ threadId, name }` | Rename a thread |
-| `thread/unarchive` | `{ threadId }` | Restore an archived thread |
 | `thread/rollback` | `{ threadId, numTurns }` | Undo last N turns |
 | `thread/compact/start` | `{ threadId }` | Trigger context compaction |
 
@@ -34,7 +33,8 @@ These methods are handled by Anchor directly and do not go through `codex app-se
 
 | Method | Params | Notes |
 |---|---|---|
-| `turn/start` | `{ threadId, input, collaborationMode?, model?, effort?, sandboxPolicy? }` | Start a turn. `input` is `[{ type: "text", text }]`. `collaborationMode` sets plan/code mode. |
+| `turn/start` | `{ threadId, input, collaborationMode?, model?, effort?, sandboxPolicy?, personality?, summary? }` | Start a turn. `input` is `[{ type: "text", text }]`. `collaborationMode` sets plan/code mode. |
+| `turn/steer` | `{ threadId, input, expectedTurnId? }` | Add input to an active turn without interrupting it. |
 | `turn/interrupt` | `{ threadId, turnId }` | Interrupt an in-progress turn. Returns `{}`, then `turn/completed` with status `"Interrupted"`. |
 
 ### Collaboration Mode
@@ -101,7 +101,6 @@ These are not JSON-RPC — they are raw control frames handled by the Orbit DO.
 | `thread/tokenUsage/updated` | `{ threadId, inputTokens?, outputTokens?, totalTokens? }` | Token usage update |
 | `thread/closed` | `{ threadId }` | Thread unloaded from server |
 | `thread/archived` | `{ threadId }` | Thread was archived (server-initiated) |
-| `thread/unarchived` | `{ thread: ThreadInfo }` | Thread was unarchived |
 
 ### Turn Lifecycle
 

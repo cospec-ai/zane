@@ -68,6 +68,24 @@ class MessagesStore {
     return this.#streamingReasoningTextByThread.get(threadId) ?? "";
   }
 
+  steer(threadId: string, text: string): { success: boolean; error?: string } {
+    const turnId = this.#turnIdByThread.get(threadId);
+    const turnStatus = this.#turnStatusByThread.get(threadId) ?? null;
+    if (!turnId || (turnStatus ?? "").toLowerCase() !== "inprogress") {
+      return { success: false, error: "No active turn to steer" };
+    }
+
+    return socket.send({
+      method: "turn/steer",
+      id: Date.now(),
+      params: {
+        threadId,
+        input: [{ type: "text", text }],
+        expectedTurnId: turnId,
+      },
+    });
+  }
+
   interrupt(threadId: string): { success: boolean; error?: string } {
     const turnId = this.#turnIdByThread.get(threadId);
     const turnStatus = this.#turnStatusByThread.get(threadId) ?? null;

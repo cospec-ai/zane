@@ -102,6 +102,10 @@ class ThreadsStore {
       onThreadStarted?: (threadId: string) => void;
       onThreadStartFailed?: (error: Error) => void;
       collaborationMode?: CollaborationMode;
+      modelProvider?: string;
+      baseInstructions?: string;
+      developerInstructions?: string;
+      personality?: string;
     }
   ) {
     this.#startThread(cwd, input, options);
@@ -178,16 +182,6 @@ class ThreadsStore {
     }
   }
 
-  unarchive(threadId: string) {
-    const id = this.#nextId++;
-    this.#pendingRequests.set(id, "unarchive");
-    socket.send({
-      method: "thread/unarchive",
-      id,
-      params: { threadId },
-    });
-  }
-
   rollback(threadId: string, numTurns = 1) {
     const id = this.#nextId++;
     this.#pendingRequests.set(id, "rollback");
@@ -258,14 +252,6 @@ class ThreadsStore {
       return;
     }
 
-    if (msg.method === "thread/unarchived") {
-      const params = msg.params as { thread: ThreadInfo };
-      if (params?.thread && !this.list.some((t) => t.id === params.thread.id)) {
-        this.list = [params.thread, ...this.list];
-      }
-      return;
-    }
-
     if (msg.id != null && this.#pendingRequests.has(msg.id as number)) {
       const type = this.#pendingRequests.get(msg.id as number);
       this.#pendingRequests.delete(msg.id as number);
@@ -283,16 +269,6 @@ class ThreadsStore {
       if (type === "collaborationPresets" && msg.result) {
         const result = msg.result as { data: CollaborationModeMask[] };
         this.#collaborationPresets = result.data || [];
-      }
-
-      if (type === "unarchive" && msg.result) {
-        const result = msg.result as { thread?: ThreadInfo };
-        if (result.thread) {
-          socket.subscribeThread(result.thread.id);
-          if (!this.list.some((t) => t.id === result.thread!.id)) {
-            this.list = [result.thread, ...this.list];
-          }
-        }
       }
 
       if (type === "rollback" && msg.result) {
@@ -399,6 +375,10 @@ class ThreadsStore {
       onThreadStarted?: (threadId: string) => void;
       onThreadStartFailed?: (error: Error) => void;
       collaborationMode?: CollaborationMode;
+      modelProvider?: string;
+      baseInstructions?: string;
+      developerInstructions?: string;
+      personality?: string;
     }
   ) {
     const requestedModel = this.#resolveStartModel(options?.collaborationMode);
@@ -418,6 +398,10 @@ class ThreadsStore {
         ...(requestedModel ? { model: requestedModel } : {}),
         ...(options?.approvalPolicy ? { approvalPolicy: options.approvalPolicy } : {}),
         ...(options?.sandbox ? { sandbox: options.sandbox } : {}),
+        ...(options?.modelProvider ? { modelProvider: options.modelProvider } : {}),
+        ...(options?.baseInstructions ? { baseInstructions: options.baseInstructions } : {}),
+        ...(options?.developerInstructions ? { developerInstructions: options.developerInstructions } : {}),
+        ...(options?.personality ? { personality: options.personality } : {}),
       },
     });
     if (!sendResult.success) {

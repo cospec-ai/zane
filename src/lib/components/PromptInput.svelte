@@ -7,9 +7,10 @@
     mode?: ModeKind;
     modelOptions?: ModelOption[];
     modelsLoading?: boolean;
-    disabled?: boolean;
+    turnActive?: boolean;
     onStop?: () => void;
     onSubmit: (input: string) => void;
+    onSteer?: (input: string) => void;
     onModelChange: (model: string) => void;
     onReasoningChange: (effort: ReasoningEffort) => void;
     onModeChange?: (mode: ModeKind) => void;
@@ -21,9 +22,10 @@
     mode = "code",
     modelOptions = [],
     modelsLoading = false,
-    disabled = false,
+    turnActive = false,
     onStop,
     onSubmit,
+    onSteer,
     onModelChange,
     onReasoningChange,
     onModeChange,
@@ -33,7 +35,7 @@
   let modelOpen = $state(false);
   let reasoningOpen = $state(false);
 
-  const canSubmit = $derived(input.trim().length > 0 && !disabled);
+  const canSubmit = $derived(input.trim().length > 0);
 
   const reasoningOptions: { value: ReasoningEffort; label: string }[] = [
     { value: "low", label: "Low" },
@@ -65,7 +67,11 @@
   function handleSubmit(e: Event) {
     e.preventDefault();
     if (!canSubmit) return;
-    onSubmit(input.trim());
+    if (turnActive && onSteer) {
+      onSteer(input.trim());
+    } else {
+      onSubmit(input.trim());
+    }
     input = "";
   }
 
@@ -96,9 +102,8 @@
     <textarea
       bind:value={input}
       onkeydown={handleKeydown}
-      placeholder="What would you like to do?"
+      placeholder={turnActive ? "Steer the current turn..." : "What would you like to do?"}
       rows="1"
-      {disabled}
     ></textarea>
 
     <div class="footer split">
@@ -229,26 +234,21 @@
         {/if}
       </div>
 
-      {#if disabled && onStop}
-        <button type="button" class="stop-btn row" onclick={onStop} title="Stop">
-          <svg viewBox="0 0 24 24" fill="currentColor">
-            <rect x="6" y="6" width="12" height="12" rx="1"/>
+      <div class="action-buttons row">
+        {#if turnActive && onStop}
+          <button type="button" class="stop-btn row" onclick={onStop} title="Stop">
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <rect x="6" y="6" width="12" height="12" rx="1"/>
+            </svg>
+          </button>
+        {/if}
+        <button type="submit" class="submit-btn row" disabled={!canSubmit}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="m6 17 5-5-5-5"/>
+            <path d="m13 17 5-5-5-5"/>
           </svg>
         </button>
-      {:else}
-        <button type="submit" class="submit-btn row" disabled={!canSubmit}>
-          {#if disabled}
-            <svg class="spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
-            </svg>
-          {:else}
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="m6 17 5-5-5-5"/>
-              <path d="m13 17 5-5-5-5"/>
-            </svg>
-          {/if}
-        </button>
-      {/if}
+      </div>
     </div>
   </div>
 </form>
@@ -291,11 +291,6 @@
 
   textarea::placeholder {
     color: var(--cli-text-muted);
-  }
-
-  textarea:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
   }
 
   .footer {
@@ -410,6 +405,10 @@
     width: 0.875rem;
     height: 0.875rem;
     flex-shrink: 0;
+  }
+
+  .action-buttons {
+    --row-gap: var(--space-xs);
   }
 
   /* Submit button */

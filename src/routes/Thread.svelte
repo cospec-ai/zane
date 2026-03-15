@@ -278,9 +278,10 @@
         {mode}
         modelOptions={models.options}
         modelsLoading={models.status === "loading"}
-        disabled={(messages.turnStatus ?? "").toLowerCase() === "inprogress" || !socket.isHealthy}
+        turnActive={(messages.turnStatus ?? "").toLowerCase() === "inprogress"}
         onStop={(messages.turnStatus ?? "").toLowerCase() === "inprogress" ? handleStop : undefined}
         onSubmit={handleSubmit}
+        onSteer={threadId ? (text) => messages.steer(threadId, text) : undefined}
         onModelChange={(v) => model = v}
         onReasoningChange={(v) => reasoningEffort = v}
         onModeChange={(v) => { modeUserOverride = true; mode = v; }}
