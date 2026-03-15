@@ -182,6 +182,9 @@
         onSandboxChange={(v) => sandbox = v}
     >
         {#snippet actions()}
+            {#if threadId}
+                <button type="button" onclick={() => threads.fork(threadId)} title="Fork thread">Fork</button>
+            {/if}
             <a href="/settings">Settings</a>
             <button type="button" onclick={() => theme.cycle()} title="Theme: {theme.current}">
                 {themeIcons[theme.current]}

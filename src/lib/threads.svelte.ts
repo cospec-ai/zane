@@ -182,6 +182,16 @@ class ThreadsStore {
     }
   }
 
+  fork(threadId: string) {
+    const id = this.#nextId++;
+    this.#pendingRequests.set(id, "fork");
+    socket.send({
+      method: "thread/fork",
+      id,
+      params: { threadId },
+    });
+  }
+
   rollback(threadId: string, numTurns = 1) {
     const id = this.#nextId++;
     this.#pendingRequests.set(id, "rollback");
@@ -260,6 +270,13 @@ class ThreadsStore {
         const result = msg.result as { data: ThreadInfo[] };
         this.list = result.data || [];
         this.loading = false;
+      }
+
+      if (type === "fork" && msg.result) {
+        const result = msg.result as { thread?: ThreadInfo };
+        if (result.thread) {
+          this.#handleNewThread(result.thread);
+        }
       }
 
       if (type === "resume") {
